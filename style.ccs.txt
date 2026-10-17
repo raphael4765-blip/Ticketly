@@ -1,0 +1,403 @@
+
+* {
+  box-sizing: border-box;
+}
+
+:root {
+  --background: #f7f8fc;
+  --surface: #ffffff;
+  --text: #171a2b;
+  --muted: #71758a;
+  --purple: #6654e8;
+  --purple-light: #efedff;
+  --border: #e7e8f0;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  margin: 0;
+  font-family: Arial, Helvetica, sans-serif;
+  color: var(--text);
+  background: var(--background);
+  line-height: 1.6;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+button, input, select {
+  font: inherit;
+}
+
+button {
+  cursor: pointer;
+}
+
+.topbar {
+  min-height: 76px;
+  padding: 16px 7%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  background: white;
+  border-bottom: 1px solid var(--border);
+}
+
+.logo {
+  font-size: 27px;
+  font-weight: 800;
+  letter-spacing: -1px;
+}
+
+.logo span {
+  color: var(--purple);
+}
+
+nav {
+  display: flex;
+  gap: 26px;
+  color: #55596c;
+}
+
+nav a:hover {
+  color: var(--purple);
+}
+
+.outline-btn {
+  background: white;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 9px 17px;
+}
+
+.hero {
+  padding: 76px 20px 58px;
+  text-align: center;
+  background:
+    radial-gradient(ellipse at top, #eeebff 0%, transparent 68%),
+    var(--background);
+}
+
+.eyebrow {
+  margin: 0 0 10px;
+  color: var(--purple);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 2px;
+}
+
+h1 {
+  margin: 0;
+  font-size: clamp(38px, 6vw, 66px);
+  line-height: 1.12;
+  letter-spacing: -2px;
+}
+
+h1 span {
+  color: var(--purple);
+}
+
+.hero-text {
+  max-width: 550px;
+  margin: 20px auto 27px;
+  color: var(--muted);
+}
+
+.search-box {
+  display: flex;
+  max-width: 700px;
+  margin: 0 auto;
+  padding: 7px;
+  gap: 8px;
+  background: white;
+  border: 1px solid var(--border);
+  border-radius: 15px;
+  box-shadow: 0 12px 35px #2920500c;
+}
+
+.search-box input {
+  flex: 1;
+  min-width: 0;
+  padding: 12px;
+  border: 0;
+  outline: none;
+}
+
+.search-box button,
+.sell-form button {
+  border: 0;
+  border-radius: 10px;
+  padding: 12px 23px;
+  background: var(--purple);
+  color: white;
+  font-weight: 700;
+}
+
+button:hover {
+  filter: brightness(0.96);
+}
+
+.quick-categories {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 10px;
+  margin-top: 23px;
+}
+
+.category {
+  padding: 9px 16px;
+  border: 1px solid var(--border);
+  border-radius: 30px;
+  background: white;
+}
+
+.category.active {
+  color: var(--purple);
+  border-color: var(--purple);
+  background: var(--purple-light);
+}
+
+.content-section,
+.sell-section {
+  max-width: 1120px;
+  margin: auto;
+  padding: 54px 24px;
+}
+
+.section-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: end;
+  margin-bottom: 24px;
+}
+
+h2 {
+  margin: 0;
+  font-size: clamp(25px, 4vw, 34px);
+  line-height: 1.25;
+  letter-spacing: -0.8px;
+}
+
+.muted {
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.ticket-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 20px;
+}
+
+.ticket-card {
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: var(--surface);
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.ticket-card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 12px 28px #29205012;
+}
+
+.ticket-art {
+  min-height: 145px;
+  display: grid;
+  place-items: center;
+  background: linear-gradient(135deg, #e8e5ff, #f7eaff);
+  font-size: 48px;
+}
+
+.ticket-card:nth-child(3n + 2) .ticket-art {
+  background: linear-gradient(135deg, #dff8f0, #e8edff);
+}
+
+.ticket-card:nth-child(3n) .ticket-art {
+  background: linear-gradient(135deg, #fff0dc, #ffe3ef);
+}
+
+.ticket-info {
+  padding: 18px;
+}
+
+.ticket-category {
+  color: var(--purple);
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.ticket-info h3 {
+  margin: 8px 0;
+  font-size: 19px;
+  line-height: 1.35;
+}
+
+.ticket-location,
+.ticket-date {
+  margin: 4px 0;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.ticket-bottom {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  margin-top: 18px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border);
+}
+
+.ticket-price {
+  font-size: 21px;
+  font-weight: 800;
+}
+
+.demo-tag {
+  padding: 5px 8px;
+  border-radius: 6px;
+  background: #f1f1f5;
+  color: #686b7b;
+  font-size: 10px;
+}
+
+.empty-message {
+  padding: 30px;
+  text-align: center;
+  color: var(--muted);
+}
+
+.sell-section {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  align-items: start;
+  gap: 50px;
+  margin-bottom: 45px;
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  background: white;
+}
+
+.sell-section > div {
+  padding-top: 20px;
+}
+
+.sell-section .muted {
+  margin-top: 15px;
+}
+
+.sell-form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.sell-form label {
+  margin-top: 7px;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.sell-form input,
+.sell-form select {
+  width: 100%;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: white;
+}
+
+.sell-form button {
+  margin-top: 12px;
+}
+
+.notice {
+  position: fixed;
+  right: 20px;
+  bottom: 20px;
+  max-width: 330px;
+  padding: 14px 18px;
+  border-radius: 12px;
+  background: #201c35;
+  color: white;
+  box-shadow: 0 5px 25px #0002;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s;
+}
+
+.notice.visible {
+  opacity: 1;
+}
+
+footer {
+  padding: 30px 20px;
+  text-align: center;
+  background: white;
+  border-top: 1px solid var(--border);
+}
+
+footer p {
+  margin: 5px 0;
+  color: var(--muted);
+}
+
+footer .small {
+  font-size: 12px;
+}
+
+@media (max-width: 760px) {
+  .topbar {
+    padding: 14px 5%;
+    flex-wrap: wrap;
+  }
+
+  nav {
+    gap: 12px;
+    font-size: 13px;
+  }
+
+  .hero {
+    padding-top: 55px;
+  }
+
+  .ticket-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .sell-section {
+    grid-template-columns: 1fr;
+    gap: 25px;
+  }
+}
+
+@media (max-width: 480px) {
+  .ticket-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .search-box {
+    flex-direction: column;
+  }
+
+  .search-box button {
+    width: 100%;
+  }
+
+  .section-heading {
+    align-items: start;
+    gap: 10px;
+  }
+}

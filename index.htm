@@ -1,0 +1,98 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Ticketly - Find Your Next Event</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="topbar">
+    <a class="logo" href="#">Ticketly<span>.</span></a>
+    <nav>
+      <a href="#tickets">Find tickets</a>
+      <a href="#sell">Sell tickets</a>
+    </nav>
+    <button class="outline-btn" onclick="showNotice('Accounts will be added in a future version.')">Sign in</button>
+  </header>
+
+  <main>
+    <section class="hero">
+      <p class="eyebrow">YOUR NEXT EXPERIENCE STARTS HERE</p>
+      <h1>Find your next<br><span>unforgettable event.</span></h1>
+      <p class="hero-text">Discover tickets for football, concerts and events around the world.</p>
+
+      <form id="searchForm" class="search-box">
+        <input id="searchInput" type="search"
+          placeholder="Search teams, artists, events or countries..."
+          aria-label="Search tickets">
+        <button type="submit">Search</button>
+      </form>
+
+      <div class="quick-categories">
+        <button class="category active" data-category="All">All events</button>
+        <button class="category" data-category="Football">⚽ Football</button>
+        <button class="category" data-category="Concerts">🎤 Concerts</button>
+        <button class="category" data-category="Other">✨ Other events</button>
+      </div>
+    </section>
+
+    <section class="content-section" id="tickets">
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow">EXPLORE</p>
+          <h2>Tickets for you</h2>
+        </div>
+        <span id="resultCount" class="muted"></span>
+      </div>
+
+      <div id="ticketGrid" class="ticket-grid"></div>
+      <p id="emptyMessage" class="empty-message" hidden>
+        No tickets found. Try another search.
+      </p>
+    </section>
+
+    <section class="sell-section" id="sell">
+      <div>
+        <p class="eyebrow">GOT A TICKET?</p>
+        <h2>Let someone else enjoy the event.</h2>
+        <p class="muted">Create a demo listing below. It will appear on this page until you refresh.</p>
+      </div>
+
+      <form id="sellForm" class="sell-form">
+        <label for="eventName">Event name</label>
+        <input id="eventName" required placeholder="e.g. Arsenal vs Chelsea">
+
+        <label for="eventCategory">Category</label>
+        <select id="eventCategory" required>
+          <option value="Football">Football</option>
+          <option value="Concerts">Concerts</option>
+          <option value="Other">Other events</option>
+        </select>
+
+        <label for="eventCountry">Country</label>
+        <input id="eventCountry" required placeholder="e.g. England">
+
+        <label for="eventDate">Event date</label>
+        <input id="eventDate" type="date" required>
+
+        <label for="ticketPrice">Price per ticket (€)</label>
+        <input id="ticketPrice" type="number" min="0.01" step="0.01" required placeholder="50">
+
+        <button type="submit">Preview my listing</button>
+      </form>
+    </section>
+
+    <div id="notice" class="notice" role="status" aria-live="polite"></div>
+  </main>
+
+  <footer>
+    <a class="logo" href="#">Ticketly<span>.</span></a>
+    <p>Discover events. Share experiences.</p>
+    <p class="small">Demo only. Listings are examples, not verified offers.</p>
+  </footer>
+
+  <script src="script.js"></script>
+</body>
+</html>
