@@ -24,17 +24,15 @@
       <p class="hero-text">Discover tickets for football, concerts and events around the world.</p>
 
       <form id="searchForm" class="search-box">
-        <input id="searchInput" type="search"
-          placeholder="Search teams, artists, events or countries..."
-          aria-label="Search tickets">
+        <input id="searchInput" type="search" placeholder="Search teams, artists, events or countries..." aria-label="Search tickets">
         <button type="submit">Search</button>
       </form>
 
       <div class="quick-categories">
-        <button class="category active" data-category="All">All events</button>
-        <button class="category" data-category="Football">⚽ Football</button>
-        <button class="category" data-category="Concerts">🎤 Concerts</button>
-        <button class="category" data-category="Other">✨ Other events</button>
+        <button type="button" class="category active" data-category="All">All events</button>
+        <button type="button" class="category" data-category="Football">⚽ Football</button>
+        <button type="button" class="category" data-category="Concerts">🎤 Concerts</button>
+        <button type="button" class="category" data-category="Other">✨ Other events</button>
       </div>
     </section>
 
@@ -48,9 +46,7 @@
       </div>
 
       <div id="ticketGrid" class="ticket-grid"></div>
-      <p id="emptyMessage" class="empty-message" hidden>
-        No tickets found. Try another search.
-      </p>
+      <p id="emptyMessage" class="empty-message" hidden>No tickets found. Try another search.</p>
     </section>
 
     <section class="sell-section" id="sell">
@@ -90,9 +86,10 @@
   <footer>
     <a class="logo" href="#">Ticketly<span>.</span></a>
     <p>Discover events. Share experiences.</p>
-    <p class="small">Demo only. Listings are examples, not verified offers.</p>
+    <p class="small">Demo only. Sample listings are not verified offers.</p>
   </footer>
 
   <script src="script.js"></script>
 </body>
 </html>
+
