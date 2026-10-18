@@ -3,85 +3,135 @@ const tickets = [
   {
     event: "Arsenal Match",
     category: "Football",
-    location: "London, United Kingdom",
+    country: "England",
+    date: "2027-01-10",
     price: 85,
     quantity: 1,
+    emoji: "⚽",
     sample: true
   },
   {
     event: "Live Music Concert",
-    category: "Concert",
-    location: "Paris, France",
+    category: "Concerts",
+    country: "France",
+    date: "2027-02-14",
     price: 120,
     quantity: 2,
+    emoji: "🎤",
     sample: true
   },
   {
     event: "Summer Music Festival",
-    category: "Festival",
-    location: "Barcelona, Spain",
+    category: "Other",
+    country: "Spain",
+    date: "2027-06-20",
     price: 65,
     quantity: 3,
+    emoji: "🎶",
     sample: true
   }
 ];
 
 let selectedCategory = "All";
 
-const list = document.querySelector("#ticket-list");
-const search = document.querySelector("#search");
-const empty = document.querySelector("#empty");
+const ticketGrid = document.querySelector("#ticketGrid");
+const searchInput = document.querySelector("#searchInput");
+const emptyMessage = document.querySelector("#emptyMessage");
+const resultCount = document.querySelector("#resultCount");
+const notice = document.querySelector("#notice");
+
+function showNotice(message) {
+  notice.textContent = message;
+  notice.classList.add("visible");
+
+  clearTimeout(showNotice.timer);
+  showNotice.timer = setTimeout(() => {
+    notice.classList.remove("visible");
+  }, 3500);
+}
+
+function formatDate(dateString) {
+  if (!dateString) return "Date not specified";
+
+  return new Date(dateString + "T12:00:00").toLocaleDateString("en-GB", {
+    day: "numeric",
+    month: "short",
+    year: "numeric"
+  });
+}
 
 function renderTickets() {
-  const query = search.value.trim().toLowerCase();
+  const query = searchInput.value.trim().toLowerCase();
 
   const filtered = tickets.filter(ticket => {
-    const text = [
+    const searchableText = [
       ticket.event,
       ticket.category,
-      ticket.location
+      ticket.country,
+      ticket.date
     ].join(" ").toLowerCase();
 
-    return text.includes(query) &&
+    return searchableText.includes(query) &&
       (selectedCategory === "All" ||
        ticket.category === selectedCategory);
   });
 
-  list.replaceChildren();
-  empty.hidden = filtered.length > 0;
+  ticketGrid.replaceChildren();
+  emptyMessage.hidden = filtered.length !== 0;
+
+  resultCount.textContent =
+    filtered.length + (filtered.length === 1 ? " listing" : " listings");
 
   filtered.forEach(ticket => {
     const card = document.createElement("article");
     card.className = "ticket-card";
 
-    const category = document.createElement("p");
-    category.className = "category";
+    const art = document.createElement("div");
+    art.className = "ticket-art";
+    art.textContent = ticket.emoji;
+
+    const info = document.createElement("div");
+    info.className = "ticket-info";
+
+    const category = document.createElement("span");
+    category.className = "ticket-category";
     category.textContent = ticket.category;
 
     const title = document.createElement("h3");
     title.textContent = ticket.event;
 
     const location = document.createElement("p");
-    location.textContent = ticket.location;
+    location.className = "ticket-location";
+    location.textContent = "📍 " + ticket.country;
 
-    const price = document.createElement("p");
-    price.className = "price";
-    price.textContent = `€${Number(ticket.price).toFixed(2)}`;
+    const date = document.createElement("p");
+    date.className = "ticket-date";
+    date.textContent = "📅 " + formatDate(ticket.date);
 
-    const quantity = document.createElement("p");
-    quantity.textContent = `${ticket.quantity} ticket(s)`;
+    const bottom = document.createElement("div");
+    bottom.className = "ticket-bottom";
 
-    const note = document.createElement("small");
-    note.textContent = ticket.sample
-      ? "Sample listing — not a real offer"
-      : "User-created demo listing";
+    const price = document.createElement("span");
+    price.className = "ticket-price";
+    price.textContent = "€" + Number(ticket.price).toFixed(2);
 
-    card.append(category, title, location, price, quantity, note);
-    list.append(card);
+    const tag = document.createElement("span");
+    tag.className = "demo-tag";
+    tag.textContent = ticket.sample ? "SAMPLE" : "DEMO LISTING";
+
+    bottom.append(price, tag);
+    info.append(category, title, location, date, bottom);
+    card.append(art, info);
+    ticketGrid.append(card);
   });
 }
 
-search.addEventListener("input", renderTickets);
+searchInput.addEventListener("input", renderTickets);
+
+document.querySelector("#searchForm").addEventListener("submit", event => {
+  event.preventDefault();
+  renderTickets();
+});
 
 document.querySelectorAll("[data-category]").forEach(button => {
   button.addEventListener("click", () => {
@@ -95,31 +145,36 @@ document.querySelectorAll("[data-category]").forEach(button => {
   });
 });
 
-document.querySelector("#sell-form").addEventListener("submit", event => {
+document.querySelector("#sellForm").addEventListener("submit", event => {
   event.preventDefault();
 
-  const form = new FormData(event.currentTarget);
-  const price = Number(form.get("price"));
-  const quantity = Number(form.get("quantity"));
+  const eventName = document.querySelector("#eventName").value.trim();
+  const category = document.querySelector("#eventCategory").value;
+  const country = document.querySelector("#eventCountry").value.trim();
+  const date = document.querySelector("#eventDate").value;
+  const price = Number(document.querySelector("#ticketPrice").value);
 
-  if (!Number.isFinite(price) || price <= 0 ||
-      !Number.isInteger(quantity) || quantity < 1 || quantity > 20) {
-    document.querySelector("#form-message").textContent =
-      "Enter a valid price and ticket quantity.";
+  if (!eventName || !country || !date ||
+      !Number.isFinite(price) || price <= 0) {
+    showNotice("Please complete every field with valid information.");
     return;
   }
 
   tickets.unshift({
-    event: String(form.get("event")).trim(),
-    category: String(form.get("category")),
-    location: String(form.get("location")).trim(),
+    event: eventName,
+    category,
+    country,
+    date,
     price,
-    quantity,
+    quantity: 1,
+    emoji: category === "Football" ? "⚽" :
+      category === "Concerts" ? "🎤" : "🎟️",
     sample: false
   });
 
   selectedCategory = "All";
-  search.value = "";
+  searchInput.value = "";
+
   document.querySelectorAll("[data-category]").forEach(button => {
     button.classList.toggle("active", button.dataset.category === "All");
   });
@@ -127,9 +182,9 @@ document.querySelector("#sell-form").addEventListener("submit", event => {
   renderTickets();
   event.currentTarget.reset();
 
-  document.querySelector("#form-message").textContent =
-    "Listing added to this demo. It is not published online.";
-  document.querySelector("#explore").scrollIntoView({ behavior: "smooth" });
+  showNotice("Your demo listing was added! It won't be saved after refreshing.");
+  document.querySelector("#tickets").scrollIntoView({ behavior: "smooth" });
 });
 
 renderTickets();
+
