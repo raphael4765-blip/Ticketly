@@ -1,5 +1,8 @@
 
-const tickets = [
+const SUPABASE_URL = "sb_publishable_jENZfb_D2Tws5sk3bkSkQA_BDvzdknA";
+const SUPABASE_KEY = "https://lhmatsjxdkgoqubuezfi.supabase.co/rest/v1/ ";
+
+let tickets = [
   {
     event: "Arsenal Match",
     category: "Football",
@@ -43,7 +46,6 @@ const notice = document.querySelector("#notice");
 function showNotice(message) {
   notice.textContent = message;
   notice.classList.add("visible");
-
   clearTimeout(showNotice.timer);
   showNotice.timer = setTimeout(() => {
     notice.classList.remove("visible");
@@ -58,6 +60,12 @@ function formatDate(dateString) {
     month: "short",
     year: "numeric"
   });
+}
+
+function emojiFor(category) {
+  if (category === "Football") return "⚽";
+  if (category === "Concerts") return "🎤";
+  return "🎟️";
 }
 
 function renderTickets() {
@@ -88,7 +96,7 @@ function renderTickets() {
 
     const art = document.createElement("div");
     art.className = "ticket-art";
-    art.textContent = ticket.emoji;
+    art.textContent = ticket.emoji || emojiFor(ticket.category);
 
     const info = document.createElement("div");
     info.className = "ticket-info";
@@ -117,13 +125,52 @@ function renderTickets() {
 
     const tag = document.createElement("span");
     tag.className = "demo-tag";
-    tag.textContent = ticket.sample ? "SAMPLE" : "DEMO LISTING";
+    tag.textContent = ticket.sample ? "SAMPLE" : "LISTED";
 
     bottom.append(price, tag);
     info.append(category, title, location, date, bottom);
     card.append(art, info);
     ticketGrid.append(card);
   });
+}
+
+async function loadTickets() {
+  try {
+    const response = await fetch(
+      `${SUPABASE_URL}/rest/v1/tickets?select=*&order=created_at.desc`,
+      {
+        headers: {
+          apikey: SUPABASE_KEY,
+          Authorization: `Bearer ${SUPABASE_KEY}`
+        }
+      }
+    );
+
+    if (!response.ok) {
+      throw new Error(await response.text());
+    }
+
+    const savedTickets = await response.json();
+
+    const databaseTickets = savedTickets.map(ticket => ({
+      id: ticket.id,
+      event: ticket.event_name,
+      category: ticket.category,
+      country: ticket.country,
+      date: ticket.event_date,
+      price: Number(ticket.price),
+      quantity: 1,
+      emoji: emojiFor(ticket.category),
+      sample: false
+    }));
+
+    tickets = [...databaseTickets, ...tickets.filter(t => t.sample)];
+    renderTickets();
+    showNotice("Saved Ticketly listings loaded!");
+  } catch (error) {
+    console.error("Could not load saved tickets:", error);
+    showNotice("Couldn't load online tickets. Check your connection settings.");
+  }
 }
 
 searchInput.addEventListener("input", renderTickets);
@@ -145,7 +192,7 @@ document.querySelectorAll("[data-category]").forEach(button => {
   });
 });
 
-document.querySelector("#sellForm").addEventListener("submit", event => {
+document.querySelector("#sellForm").addEventListener("submit", async event => {
   event.preventDefault();
 
   const eventName = document.querySelector("#eventName").value.trim();
@@ -154,37 +201,73 @@ document.querySelector("#sellForm").addEventListener("submit", event => {
   const date = document.querySelector("#eventDate").value;
   const price = Number(document.querySelector("#ticketPrice").value);
 
-  if (!eventName || !country || !date ||
-      !Number.isFinite(price) || price <= 0) {
+  if (
+    !eventName ||
+    !country ||
+    !date ||
+    !Number.isFinite(price) ||
+    price <= 0 ||
+    !["Football", "Concerts", "Other"].includes(category)
+  ) {
     showNotice("Please complete every field with valid information.");
     return;
   }
 
-  tickets.unshift({
-    event: eventName,
-    category,
-    country,
-    date,
-    price,
-    quantity: 1,
-    emoji: category === "Football" ? "⚽" :
-      category === "Concerts" ? "🎤" : "🎟️",
-    sample: false
-  });
+  showNotice("Saving your listing...");
 
-  selectedCategory = "All";
-  searchInput.value = "";
+  try {
+    const response = await fetch(`${SUPABASE_URL}/rest/v1/tickets`, {
+      method: "POST",
+      headers: {
+        apikey: SUPABASE_KEY,
+        Authorization: `Bearer ${SUPABASE_KEY}`,
+        "Content-Type": "application/json",
+        Prefer: "return=representation"
+      },
+      body: JSON.stringify({
+        event_name: eventName,
+        category,
+        country,
+        event_date: date,
+        price
+      })
+    });
 
-  document.querySelectorAll("[data-category]").forEach(button => {
-    button.classList.toggle("active", button.dataset.category === "All");
-  });
+    if (!response.ok) {
+      throw new Error(await response.text());
+    }
 
-  renderTickets();
-  event.currentTarget.reset();
+    const saved = await response.json();
+    const ticket = saved[0];
 
-  showNotice("Your demo listing was added! It won't be saved after refreshing.");
-  document.querySelector("#tickets").scrollIntoView({ behavior: "smooth" });
+    tickets.unshift({
+      id: ticket.id,
+      event: ticket.event_name,
+      category: ticket.category,
+      country: ticket.country,
+      date: ticket.event_date,
+      price: Number(ticket.price),
+      quantity: 1,
+      emoji: emojiFor(ticket.category),
+      sample: false
+    });
+
+    selectedCategory = "All";
+    searchInput.value = "";
+
+    document.querySelectorAll("[data-category]").forEach(button => {
+      button.classList.toggle("active", button.dataset.category === "All");
+    });
+
+    renderTickets();
+    event.currentTarget.reset();
+    showNotice("Your listing was saved online!");
+    document.querySelector("#tickets").scrollIntoView({ behavior: "smooth" });
+  } catch (error) {
+    console.error("Could not save listing:", error);
+    showNotice("Couldn't save your listing. Check the connection and try again.");
+  }
 });
 
 renderTickets();
-
+loadTickets();
