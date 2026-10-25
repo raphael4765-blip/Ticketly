@@ -1,281 +1,190 @@
+
 const SUPABASE_URL = "https://lhmatsjxdkgoqubuezfi.supabase.co";
 const SUPABASE_KEY = "sb_publishable_jENZfb_D2Tws5sk3bkSkQA_BDvzdknA";
 
-let supabase = null;
+let db = null;
 let currentUser = null;
 let authMode = "signin";
-let tickets = [];
-let selectedCategory = "All";
+let activeCategory = "All";
+let allTickets = [];
 
-const $ = (id) => document.getElementById(id);
+const $ = id => document.getElementById(id);
 
-function showNotice(message, isError = false) {
-  const notice = $("notice");
-  if (!notice) {
-    alert(message);
-    return;
-  }
-  notice.textContent = message;
-  notice.style.color = isError ? "#b42318" : "";
-  notice.hidden = false;
+function notice(message, error = false) {
+  const el = $("notice");
+  el.textContent = message;
+  el.classList.toggle("notice-error", error);
+  el.hidden = false;
 }
 
-function openAuthForm(mode = "signin") {
-  authMode = mode;
-  $("authSection").hidden = false;
-  $("authTitle").textContent =
-    mode === "signup" ? "Create your Ticketly account" : "Sign in to Ticketly";
-  $("authMessage").textContent =
-    mode === "signup"
-      ? "Create a free account to list tickets."
-      : "Welcome back! Sign in to continue.";
-  $("authSubmit").textContent =
-    mode === "signup" ? "Create account" : "Sign in";
-  $("authPassword").autocomplete =
-    mode === "signup" ? "new-password" : "current-password";
-  $("authSection").scrollIntoView({ behavior: "smooth", block: "start" });
+function normalCategory(value) {
+  const c = String(value || "").toLowerCase();
+  if (c.includes("football") || c.includes("sport")) return "Football";
+  if (c.includes("concert") || c.includes("music")) return "Concerts";
+  return "Other";
+}
+
+function escapeHTML(value) {
+  return String(value ?? "").replace(/[&<>"']/g, ch => ({
+    "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
+  }[ch]));
 }
 
 function updateAuthUI() {
-  if ($("openAuth")) {
-    $("openAuth").textContent = currentUser ? "My account" : "Sign in";
-  }
-  if ($("signOutButton")) {
-    $("signOutButton").hidden = !currentUser;
-  }
-  if ($("sellForm")) {
-    $("sellForm").querySelectorAll("input, select, button").forEach((el) => {
-      el.disabled = !currentUser;
-    });
-  }
+  const signedIn = !!currentUser;
+  $("openAuth").textContent = signedIn ? "My account" : "Sign in / Sign up";
+  $("authTitle").textContent = signedIn ? "Your account" : authMode === "signup" ? "Create account" : "Sign in";
+  $("authSubmit").textContent = authMode === "signup" ? "Create account" : "Sign in";
+  $("authSubmit").hidden = signedIn;
+  $("authEmail").disabled = signedIn;
+  $("authPassword").disabled = signedIn;
+  $("authSwitch").hidden = signedIn;
+  $("authSwitch").textContent = authMode === "signup" ? "Already have an account? Sign in" : "Need an account? Sign up";
+  $("signOutButton").hidden = !signedIn;
+  $("authMessage").textContent = signedIn
+    ? `Signed in as ${currentUser.email || "your account"}.`
+    : "Sign in or create an account to list tickets.";
 }
 
-function formatPrice(price) {
-  return new Intl.NumberFormat("en-GB", {
-    style: "currency",
-    currency: "EUR",
-  }).format(Number(price));
+function openAuth() {
+  $("authSection").hidden = false;
+  document.body.classList.add("modal-open");
+  updateAuthUI();
+}
+
+function closeAuth() {
+  $("authSection").hidden = true;
+  document.body.classList.remove("modal-open");
 }
 
 function renderTickets() {
-  const grid = $("ticketGrid");
-  if (!grid) return;
-
-  const search = ($("searchInput")?.value || "").trim().toLowerCase();
-
-  const filtered = tickets.filter((ticket) => {
-    const matchesSearch =
-      `${ticket.event_name} ${ticket.category} ${ticket.country}`
-        .toLowerCase()
-        .includes(search);
-
-    const matchesCategory =
-      selectedCategory === "All" || ticket.category === selectedCategory;
-
-    return matchesSearch && matchesCategory;
+  const query = $("searchInput").value.trim().toLowerCase();
+  const filtered = allTickets.filter(t => {
+    const matchesCategory = activeCategory === "All" || normalCategory(t.category) === activeCategory;
+    const text = `${t.event_name} ${t.country} ${t.category}`.toLowerCase();
+    return matchesCategory && text.includes(query);
   });
 
-  grid.innerHTML = "";
+  $("ticketGrid").innerHTML = filtered.map(t => {
+    const price = Number(t.price);
+    const date = t.event_date
+      ? new Date(t.event_date + "T12:00:00").toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" })
+      : "Date to be confirmed";
+    return `
+      <article class="ticket-card">
+        <div class="ticket-card-top">
+          <span class="ticket-category">${escapeHTML(normalCategory(t.category))}</span>
+          <span class="ticket-date">${escapeHTML(date)}</span>
+        </div>
+        <h3>${escapeHTML(t.event_name)}</h3>
+        <p class="ticket-country">📍 ${escapeHTML(t.country)}</p>
+        <div class="ticket-card-bottom">
+          <strong>€${Number.isFinite(price) ? price.toFixed(2) : "—"}</strong>
+          <span class="ticket-label">Listed ticket</span>
+        </div>
+      </article>`;
+  }).join("");
 
-  filtered.forEach((ticket) => {
-    const card = document.createElement("article");
-    card.className = "ticket-card";
-
-    const title = document.createElement("h3");
-    title.textContent = ticket.event_name;
-
-    const category = document.createElement("p");
-    category.textContent = ticket.category;
-
-    const location = document.createElement("p");
-    location.textContent = ticket.country;
-
-    const date = document.createElement("p");
-    date.textContent = new Date(ticket.event_date + "T12:00:00")
-      .toLocaleDateString("en-GB", {
-        day: "numeric",
-        month: "short",
-        year: "numeric",
-      });
-
-    const price = document.createElement("strong");
-    price.textContent = formatPrice(ticket.price);
-
-    card.append(title, category, location, date, price);
-    grid.appendChild(card);
-  });
-
-  if ($("resultCount")) {
-    $("resultCount").textContent =
-      `${filtered.length} ticket${filtered.length === 1 ? "" : "s"} found`;
-  }
-  if ($("emptyMessage")) {
-    $("emptyMessage").hidden = filtered.length > 0;
-  }
+  $("resultCount").textContent = `${filtered.length} ${filtered.length === 1 ? "ticket" : "tickets"}`;
+  $("emptyMessage").hidden = filtered.length !== 0;
 }
 
 async function loadTickets() {
-  if (!supabase) return;
-
-  const { data, error } = await supabase
-    .from("tickets")
-    .select("*")
+  const { data, error } = await db.from("tickets")
+    .select("id,event_name,category,country,event_date,price,created_at")
     .order("created_at", { ascending: false });
 
-  if (error) {
-    showNotice("Could not load tickets: " + error.message, true);
-    return;
-  }
-
-  tickets = data || [];
+  if (error) throw error;
+  allTickets = data || [];
   renderTickets();
 }
 
 async function startTicketly() {
   try {
-    // Load the official Supabase JavaScript library.
-    if (!window.supabase?.createClient) {
-      await new Promise((resolve, reject) => {
-        const script = document.createElement("script");
-        script.src =
-          "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2";
-        script.onload = resolve;
-        script.onerror = () =>
-          reject(new Error("Could not load the Supabase library."));
-        document.head.appendChild(script);
-      });
+    if (!window.supabase || !window.supabase.createClient) {
+      throw new Error("Supabase did not load. Check your internet connection and refresh.");
     }
 
-    if (!window.supabase?.createClient) {
-      throw new Error("Supabase library did not initialise.");
-    }
-
-    supabase = window.supabase.createClient(
-      SUPABASE_URL,
-      SUPABASE_KEY,
-      {
-        auth: {
-          persistSession: true,
-          autoRefreshToken: true,
-          detectSessionInUrl: true,
-        },
+    db = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY, {
+      auth: {
+        persistSession: true,
+        autoRefreshToken: true,
+        detectSessionInUrl: true
       }
-    );
+    });
 
-    const { data, error } = await supabase.auth.getSession();
+    const { data, error } = await db.auth.getSession();
     if (error) throw error;
-
     currentUser = data.session?.user || null;
     updateAuthUI();
 
-    supabase.auth.onAuthStateChange((_event, session) => {
+    db.auth.onAuthStateChange((_event, session) => {
       currentUser = session?.user || null;
       updateAuthUI();
     });
 
     await loadTickets();
-  } catch (error) {
-    console.error("Ticketly startup error:", error);
-    showNotice("Ticketly connection error: " + error.message, true);
+    $("notice").hidden = true;
+  } catch (e) {
+    console.error("Ticketly connection error:", e);
+    notice("Ticketly could not connect: " + e.message, true);
+    $("resultCount").textContent = "Could not load tickets";
   }
 }
 
-// Sign-in button
-$("openAuth")?.addEventListener("click", () => {
-  openAuthForm(currentUser ? "signin" : "signin");
-  updateAuthUI();
-});
-
-// Close the sign-in section
-$("closeAuth")?.addEventListener("click", () => {
-  $("authSection").hidden = true;
-});
-
-// Switch between sign-in and account creation
-$("authSwitch")?.addEventListener("click", () => {
-  openAuthForm(authMode === "signin" ? "signup" : "signin");
-});
-
-// Sign in or create account
-$("authForm")?.addEventListener("submit", async (event) => {
+async function submitAuth(event) {
   event.preventDefault();
-
-  if (!supabase) {
-    showNotice("Please wait for Ticketly to connect, then try again.", true);
-    return;
-  }
-
   const email = $("authEmail").value.trim();
   const password = $("authPassword").value;
-  const submit = $("authSubmit");
-
-  submit.disabled = true;
+  const button = $("authSubmit");
+  button.disabled = true;
 
   try {
     if (authMode === "signup") {
-      const { data, error } = await supabase.auth.signUp({
-        email,
-        password,
-      });
-
+      const { data, error } = await db.auth.signUp({ email, password });
       if (error) throw error;
 
       if (data.session) {
-        showNotice("Account created! You are now signed in.");
+        currentUser = data.user;
+        updateAuthUI();
+        $("authMessage").textContent = "Your account has been created.";
       } else {
-        showNotice("Account created! Check your email to confirm it.");
+        $("authMessage").textContent = "Account created. Check your email to confirm your account, then sign in.";
       }
     } else {
-      const { error } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      });
-
+      const { data, error } = await db.auth.signInWithPassword({ email, password });
       if (error) throw error;
-      showNotice("Signed in successfully!");
+      currentUser = data.user;
+      updateAuthUI();
+      closeAuth();
     }
-  } catch (error) {
-    showNotice(error.message || "Something went wrong.", true);
+  } catch (e) {
+    $("authMessage").textContent = e.message || "Could not sign in. Please try again.";
+    $("authMessage").classList.add("error-text");
   } finally {
-    submit.disabled = false;
+    button.disabled = false;
+    updateAuthUI();
   }
-});
+}
 
-// Sign out
-$("signOutButton")?.addEventListener("click", async () => {
-  if (!supabase) return;
-
-  const { error } = await supabase.auth.signOut();
+async function signOut() {
+  const { error } = await db.auth.signOut();
   if (error) {
-    showNotice(error.message, true);
-  } else {
-    showNotice("You have signed out.");
+    $("authMessage").textContent = error.message;
+    return;
   }
-});
+  currentUser = null;
+  authMode = "signin";
+  updateAuthUI();
+}
 
-// Search tickets
-$("searchForm")?.addEventListener("submit", (event) => {
-  event.preventDefault();
-  renderTickets();
-});
-
-$("searchInput")?.addEventListener("input", renderTickets);
-
-// Category filters
-document.querySelectorAll("[data-category]").forEach((button) => {
-  button.addEventListener("click", () => {
-    selectedCategory = button.dataset.category || "All";
-    renderTickets();
-  });
-});
-
-// Create a ticket listing
-$("sellForm")?.addEventListener("submit", async (event) => {
+async function publishTicket(event) {
   event.preventDefault();
 
-  if (!supabase || !currentUser) {
-    showNotice("Please sign in before listing a ticket.", true);
-    openAuthForm("signin");
+  if (!currentUser) {
+    authMode = "signin";
+    openAuth();
+    $("authMessage").textContent = "Please sign in before publishing a ticket.";
     return;
   }
 
@@ -285,24 +194,62 @@ $("sellForm")?.addEventListener("submit", async (event) => {
     country: $("eventCountry").value.trim(),
     event_date: $("eventDate").value,
     price: Number($("ticketPrice").value),
-    user_id: currentUser.id,
+    user_id: currentUser.id
   };
 
-  try {
-    const { error } = await supabase.from("tickets").insert(ticket);
-    if (error) throw error;
+  if (!ticket.event_name || !ticket.country || !ticket.event_date || !Number.isFinite(ticket.price) || ticket.price <= 0) {
+    notice("Please fill in all fields and enter a price greater than €0.", true);
+    return;
+  }
 
-    showNotice("Your ticket listing has been published!");
+  const button = $("sellSubmit");
+  button.disabled = true;
+  button.textContent = "Publishing…";
+
+  try {
+    const { error } = await db.from("tickets").insert([ticket]);
+    if (error) throw error;
     $("sellForm").reset();
     await loadTickets();
-  } catch (error) {
-    showNotice("Could not publish listing: " + error.message, true);
+    notice("Your ticket has been published!");
+    $("tickets").scrollIntoView({ behavior: "smooth" });
+  } catch (e) {
+    notice("Could not publish ticket: " + e.message, true);
+  } finally {
+    button.disabled = false;
+    button.textContent = "Publish ticket";
   }
+}
+
+document.addEventListener("DOMContentLoaded", () => {
+  $("openAuth").addEventListener("click", openAuth);
+  $("closeAuth").addEventListener("click", closeAuth);
+  $("authBackdrop").addEventListener("click", closeAuth);
+  $("authForm").addEventListener("submit", submitAuth);
+  $("authSwitch").addEventListener("click", () => {
+    authMode = authMode === "signup" ? "signin" : "signup";
+    $("authMessage").classList.remove("error-text");
+    updateAuthUI();
+  });
+  $("signOutButton").addEventListener("click", signOut);
+  $("sellForm").addEventListener("submit", publishTicket);
+  $("searchForm").addEventListener("submit", event => {
+    event.preventDefault();
+    renderTickets();
+  });
+  $("searchInput").addEventListener("input", renderTickets);
+
+  document.querySelectorAll("[data-category]").forEach(button => {
+    button.addEventListener("click", () => {
+      activeCategory = button.dataset.category;
+      document.querySelectorAll("[data-category]").forEach(item => item.classList.toggle("active", item === button));
+      renderTickets();
+    });
+  });
+
+  document.addEventListener("keydown", event => {
+    if (event.key === "Escape") closeAuth();
+  });
+
+  startTicketly();
 });
-
-// Initial page setup
-if ($("authSection")) $("authSection").hidden = true;
-updateAuthUI();
-startTicketly();
-
-
