@@ -1,6 +1,5 @@
 const SUPABASE_URL = "https://lhmatsjxdkgoqubuezfi.supabase.co";
-const SUPABASE_KEY ="sb_publishable_jENZfb_D2Tws5sk3bkSkQA_BDvzdknA ";
-
+const SUPABASE_KEY = "sb_publishable_jENZfb_D2Tws5sk3bkSkQA_BDvzdknA";
 let tickets = [
   {
     event: "Arsenal Match",
