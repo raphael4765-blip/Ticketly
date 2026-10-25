@@ -1,6 +1,6 @@
 
-const SUPABASE_URL = "sb_publishable_jENZfb_D2Tws5sk3bkSkQA_BDvzdknA";
-const SUPABASE_KEY = "https://lhmatsjxdkgoqubuezfi.supabase.co/rest/v1/ ";
+const SUPABASE_URL = "https://lhmatsjxdkgoqubuezfi.supabase.co/rest/v1/";
+const SUPABASE_KEY = "sb_publishable_jENZfb_D2Tws5sk3bkSkQA_BDvzdknA ";
 
 let tickets = [
   {
