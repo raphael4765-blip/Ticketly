@@ -6,6 +6,32 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Ticketly - Find Your Next Event</title>
   <link rel="stylesheet" href="style.css">
+  <style>
+    .auth-section[hidden] { display: none; }
+    .auth-section {
+      max-width: 440px;
+      margin: 30px auto;
+      padding: 24px;
+      border: 1px solid #ddd;
+      border-radius: 16px;
+      background: white;
+      color: #222;
+    }
+    .auth-section input {
+      box-sizing: border-box;
+      display: block;
+      width: 100%;
+      padding: 12px;
+      margin: 8px 0 16px;
+    }
+    .auth-section button { cursor: pointer; padding: 10px 16px; }
+    .auth-section .auth-actions {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-top: 12px;
+    }
+  </style>
 </head>
 <body>
   <header class="topbar">
@@ -14,7 +40,7 @@
       <a href="#tickets">Find tickets</a>
       <a href="#sell">Sell tickets</a>
     </nav>
-    <button class="outline-btn" onclick="showNotice('Accounts will be added in a future version.')">Sign in</button>
+    <button class="outline-btn" id="openAuth" type="button">Sign in</button>
   </header>
 
   <main>
@@ -24,7 +50,9 @@
       <p class="hero-text">Discover tickets for football, concerts and events around the world.</p>
 
       <form id="searchForm" class="search-box">
-        <input id="searchInput" type="search" placeholder="Search teams, artists, events or countries..." aria-label="Search tickets">
+        <input id="searchInput" type="search"
+          placeholder="Search teams, artists, events or countries..."
+          aria-label="Search tickets">
         <button type="submit">Search</button>
       </form>
 
@@ -44,21 +72,23 @@
         </div>
         <span id="resultCount" class="muted"></span>
       </div>
-
       <div id="ticketGrid" class="ticket-grid"></div>
-      <p id="emptyMessage" class="empty-message" hidden>No tickets found. Try another search.</p>
+      <p id="emptyMessage" class="empty-message" hidden>
+        No tickets found. Try another search.
+      </p>
     </section>
 
     <section class="sell-section" id="sell">
       <div>
         <p class="eyebrow">GOT A TICKET?</p>
         <h2>Let someone else enjoy the event.</h2>
-        <p class="muted">Create a demo listing below. It will appear on this page until you refresh.</p>
+        <p class="muted">Create a ticket listing below.</p>
       </div>
 
       <form id="sellForm" class="sell-form">
         <label for="eventName">Event name</label>
-        <input id="eventName" required placeholder="e.g. Arsenal vs Chelsea">
+        <input id="eventName" required maxlength="150"
+          placeholder="e.g. Arsenal vs Chelsea">
 
         <label for="eventCategory">Category</label>
         <select id="eventCategory" required>
@@ -68,16 +98,46 @@
         </select>
 
         <label for="eventCountry">Country</label>
-        <input id="eventCountry" required placeholder="e.g. England">
+        <input id="eventCountry" required maxlength="100"
+          placeholder="e.g. England">
 
         <label for="eventDate">Event date</label>
         <input id="eventDate" type="date" required>
 
         <label for="ticketPrice">Price per ticket (€)</label>
-        <input id="ticketPrice" type="number" min="0.01" step="0.01" required placeholder="50">
+        <input id="ticketPrice" type="number" min="0.01"
+          step="0.01" required placeholder="50">
 
-        <button type="submit">Preview my listing</button>
+        <button type="submit">List my ticket</button>
       </form>
+    </section>
+
+    <section id="authSection" class="auth-section" hidden>
+      <button type="button" id="closeAuth" class="outline-btn">Close</button>
+      <h2 id="authTitle">Sign in to Ticketly</h2>
+      <p id="authMessage">Sign in or create your free account.</p>
+
+      <form id="authForm">
+        <label for="authEmail">Email address</label>
+        <input id="authEmail" type="email" autocomplete="email"
+          required placeholder="you@example.com">
+
+        <label for="authPassword">Password</label>
+        <input id="authPassword" type="password"
+          autocomplete="current-password" minlength="8"
+          required placeholder="At least 8 characters">
+
+        <button id="authSubmit" type="submit">Sign in</button>
+      </form>
+
+      <div class="auth-actions">
+        <button type="button" id="authSwitch" class="outline-btn">
+          Create account
+        </button>
+        <button type="button" id="signOutButton" class="outline-btn" hidden>
+          Sign out
+        </button>
+      </div>
     </section>
 
     <div id="notice" class="notice" role="status" aria-live="polite"></div>
@@ -86,10 +146,9 @@
   <footer>
     <a class="logo" href="#">Ticketly<span>.</span></a>
     <p>Discover events. Share experiences.</p>
-    <p class="small">Demo only. Sample listings are not verified offers.</p>
+    <p class="small">Check ticket details carefully before purchasing.</p>
   </footer>
 
   <script src="script.js"></script>
 </body>
 </html>
-
