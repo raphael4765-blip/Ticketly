@@ -4,151 +4,105 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Ticketly - Find Your Next Event</title>
+  <title>Ticketly — Find your next event</title>
   <link rel="stylesheet" href="style.css">
-  <style>
-    .auth-section[hidden] { display: none; }
-    .auth-section {
-      max-width: 440px;
-      margin: 30px auto;
-      padding: 24px;
-      border: 1px solid #ddd;
-      border-radius: 16px;
-      background: white;
-      color: #222;
-    }
-    .auth-section input {
-      box-sizing: border-box;
-      display: block;
-      width: 100%;
-      padding: 12px;
-      margin: 8px 0 16px;
-    }
-    .auth-section button { cursor: pointer; padding: 10px 16px; }
-    .auth-section .auth-actions {
-      display: flex;
-      gap: 10px;
-      flex-wrap: wrap;
-      margin-top: 12px;
-    }
-  </style>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="script.js" defer></script>
 </head>
 <body>
-  <header class="topbar">
-    <a class="logo" href="#">Ticketly<span>.</span></a>
-    <nav>
-      <a href="#tickets">Find tickets</a>
-      <a href="#sell">Sell tickets</a>
+  <header class="site-header">
+    <a class="brand" href="./"><span class="brand-mark">T</span> Ticketly</a>
+    <nav class="header-actions">
+      <a href="#tickets">Explore tickets</a>
+      <button class="button button-primary" id="openAuth" type="button">Sign in / Sign up</button>
     </nav>
-    <button class="outline-btn" id="openAuth" type="button">Sign in</button>
   </header>
 
   <main>
     <section class="hero">
-      <p class="eyebrow">YOUR NEXT EXPERIENCE STARTS HERE</p>
-      <h1>Find your next<br><span>unforgettable event.</span></h1>
-      <p class="hero-text">Discover tickets for football, concerts and events around the world.</p>
-
-      <form id="searchForm" class="search-box">
-        <input id="searchInput" type="search"
-          placeholder="Search teams, artists, events or countries..."
-          aria-label="Search tickets">
-        <button type="submit">Search</button>
-      </form>
-
-      <div class="quick-categories">
-        <button type="button" class="category active" data-category="All">All events</button>
-        <button type="button" class="category" data-category="Football">⚽ Football</button>
-        <button type="button" class="category" data-category="Concerts">🎤 Concerts</button>
-        <button type="button" class="category" data-category="Other">✨ Other events</button>
+      <div class="hero-copy">
+        <p class="eyebrow">YOUR NEXT EXPERIENCE STARTS HERE</p>
+        <h1>Find tickets.<br><span>Make memories.</span></h1>
+        <p class="hero-text">Discover football matches, concerts and events around the world.</p>
+        <a class="button button-primary" href="#tickets">Explore tickets</a>
+      </div>
+      <div class="hero-art" aria-hidden="true">
+        <div class="ticket ticket-back"><span>LIVE</span><b>YOUR<br>NEXT<br>EVENT</b></div>
+        <div class="ticket ticket-front"><span class="ticket-dot"></span><small>TICKETLY PRESENTS</small><b>UNFORGETTABLE<br>EXPERIENCES</b><span class="ticket-line"></span><small>ONE TICKET. ONE MEMORY.</small></div>
       </div>
     </section>
 
-    <section class="content-section" id="tickets">
-      <div class="section-heading">
-        <div>
-          <p class="eyebrow">EXPLORE</p>
-          <h2>Tickets for you</h2>
-        </div>
-        <span id="resultCount" class="muted"></span>
+    <section class="search-section" id="tickets">
+      <p class="eyebrow">DISCOVER EVENTS</p>
+      <h2>Find your ticket</h2>
+      <form id="searchForm" class="search-form">
+        <label class="sr-only" for="searchInput">Search tickets</label>
+        <input id="searchInput" type="search" placeholder="Search event, country or category…">
+        <button class="button button-primary" type="submit">Search</button>
+      </form>
+      <div class="category-row">
+        <button class="category-button active" type="button" data-category="All">All events</button>
+        <button class="category-button" type="button" data-category="Football">Football</button>
+        <button class="category-button" type="button" data-category="Concerts">Concerts</button>
+        <button class="category-button" type="button" data-category="Other">Other</button>
       </div>
+      <div class="results-heading"><h3>Available tickets</h3><span id="resultCount">Loading tickets…</span></div>
+      <div id="notice" class="notice" role="status" hidden></div>
       <div id="ticketGrid" class="ticket-grid"></div>
-      <p id="emptyMessage" class="empty-message" hidden>
-        No tickets found. Try another search.
-      </p>
+      <p id="emptyMessage" class="empty-message" hidden>No tickets found. Try another search or check back soon.</p>
     </section>
 
     <section class="sell-section" id="sell">
-      <div>
-        <p class="eyebrow">GOT A TICKET?</p>
-        <h2>Let someone else enjoy the event.</h2>
-        <p class="muted">Create a ticket listing below.</p>
+      <div class="sell-copy">
+        <p class="eyebrow">HAVE A SPARE TICKET?</p>
+        <h2>Sell your ticket<br>on Ticketly.</h2>
+        <p>Sign in, add the event details and let other fans discover your listing.</p>
+        <div class="sell-note">Only list tickets you are allowed to resell. Arrange payment and delivery carefully with your buyer.</div>
       </div>
-
       <form id="sellForm" class="sell-form">
+        <h3>List a ticket</h3>
         <label for="eventName">Event name</label>
-        <input id="eventName" required maxlength="150"
-          placeholder="e.g. Arsenal vs Chelsea">
-
-        <label for="eventCategory">Category</label>
-        <select id="eventCategory" required>
-          <option value="Football">Football</option>
-          <option value="Concerts">Concerts</option>
-          <option value="Other">Other events</option>
-        </select>
-
-        <label for="eventCountry">Country</label>
-        <input id="eventCountry" required maxlength="100"
-          placeholder="e.g. England">
-
-        <label for="eventDate">Event date</label>
-        <input id="eventDate" type="date" required>
-
-        <label for="ticketPrice">Price per ticket (€)</label>
-        <input id="ticketPrice" type="number" min="0.01"
-          step="0.01" required placeholder="50">
-
-        <button type="submit">List my ticket</button>
+        <input id="eventName" required maxlength="120" placeholder="e.g. Arsenal vs Chelsea">
+        <div class="form-two">
+          <div><label for="eventCategory">Category</label>
+            <select id="eventCategory" required>
+              <option value="Football">Football</option>
+              <option value="Concerts">Concerts</option>
+              <option value="Other">Other</option>
+            </select>
+          </div>
+          <div><label for="eventCountry">Country</label><input id="eventCountry" required maxlength="80" placeholder="e.g. Cyprus"></div>
+        </div>
+        <div class="form-two">
+          <div><label for="eventDate">Event date</label><input id="eventDate" type="date" required></div>
+          <div><label for="ticketPrice">Price (€)</label><input id="ticketPrice" type="number" min="0.01" step="0.01" required placeholder="85.00"></div>
+        </div>
+        <button class="button button-primary button-wide" type="submit" id="sellSubmit">Publish ticket</button>
+        <p class="form-hint">You must be signed in to publish a listing.</p>
       </form>
     </section>
-
-    <section id="authSection" class="auth-section" hidden>
-      <button type="button" id="closeAuth" class="outline-btn">Close</button>
-      <h2 id="authTitle">Sign in to Ticketly</h2>
-      <p id="authMessage">Sign in or create your free account.</p>
-
-      <form id="authForm">
-        <label for="authEmail">Email address</label>
-        <input id="authEmail" type="email" autocomplete="email"
-          required placeholder="you@example.com">
-
-        <label for="authPassword">Password</label>
-        <input id="authPassword" type="password"
-          autocomplete="current-password" minlength="8"
-          required placeholder="At least 8 characters">
-
-        <button id="authSubmit" type="submit">Sign in</button>
-      </form>
-
-      <div class="auth-actions">
-        <button type="button" id="authSwitch" class="outline-btn">
-          Create account
-        </button>
-        <button type="button" id="signOutButton" class="outline-btn" hidden>
-          Sign out
-        </button>
-      </div>
-    </section>
-
-    <div id="notice" class="notice" role="status" aria-live="polite"></div>
   </main>
 
-  <footer>
-    <a class="logo" href="#">Ticketly<span>.</span></a>
-    <p>Discover events. Share experiences.</p>
-    <p class="small">Check ticket details carefully before purchasing.</p>
-  </footer>
+  <footer><a class="brand footer-brand" href="./"><span class="brand-mark">T</span> Ticketly</a><p>Discover events. Share experiences.</p></footer>
 
-  <script src="script.js"></script>
+  <div id="authSection" class="modal" hidden>
+    <div class="modal-backdrop" id="authBackdrop"></div>
+    <section class="auth-card" role="dialog" aria-modal="true" aria-labelledby="authTitle">
+      <button id="closeAuth" class="close-button" type="button" aria-label="Close">×</button>
+      <p class="eyebrow">WELCOME TO TICKETLY</p>
+      <h2 id="authTitle">Sign in</h2>
+      <p id="authMessage" class="auth-message">Sign in or create an account to list tickets.</p>
+      <form id="authForm">
+        <label for="authEmail">Email address</label>
+        <input id="authEmail" type="email" autocomplete="email" required placeholder="you@example.com">
+        <label for="authPassword">Password</label>
+        <input id="authPassword" type="password" autocomplete="current-password" minlength="6" required placeholder="At least 6 characters">
+        <button id="authSubmit" class="button button-primary button-wide" type="submit">Sign in</button>
+      </form>
+      <button id="authSwitch" class="text-button" type="button">Need an account? Sign up</button>
+      <button id="signOutButton" class="text-button sign-out" type="button" hidden>Sign out</button>
+    </section>
+  </div>
 </body>
 </html>
+
