@@ -56,11 +56,13 @@ function updateAuthUI() {
   if (!$("openAuth")) return;
 
   const signed = !!currentUser;
+
   $("openAuth").textContent = signed
     ? (currentUser.email || "My account")
     : "Sign in / Sign up";
 
   $("signOutButton").hidden = !signed;
+
   $("authTitle").textContent = signed
     ? "Your account"
     : authMode === "signup" ? "Create account" : "Sign in";
@@ -214,7 +216,11 @@ async function submitAuth(event) {
   const button = $("authSubmit");
 
   button.disabled = true;
-  setMessage("authMessage", authMode === "signup" ? "Creating account…" : "Signing in…");
+
+  setMessage(
+    "authMessage",
+    authMode === "signup" ? "Creating your account…" : "Signing in…"
+  );
 
   try {
     if (authMode === "signup") {
@@ -228,14 +234,19 @@ async function submitAuth(event) {
 
       if (error) throw error;
 
-      if (data.session) {
+      if (data.session && data.user) {
         currentUser = data.user;
         updateAuthUI();
-        setMessage("authMessage", "Account created and signed in.");
+        closeAuth();
+        showNotice("Your account is ready! You are signed in.");
       } else {
+        // Email confirmation is required before the account can sign in.
+        currentUser = null;
+        updateAuthUI();
+
         setMessage(
           "authMessage",
-          "Account request created. Check your inbox and spam folder for a confirmation email. If email sending is rate-limited, wait before retrying."
+          "📧 Almost done! Go to your email inbox and click the verification link to activate your Ticketly account. Check your spam folder too. After verifying, return here and sign in."
         );
       }
     } else {
@@ -253,7 +264,11 @@ async function submitAuth(event) {
       await refreshUnreadCount();
     }
   } catch (e) {
-    setMessage("authMessage", e.message || "Authentication failed.", true);
+    setMessage(
+      "authMessage",
+      e.message || "Authentication failed.",
+      true
+    );
   } finally {
     button.disabled = false;
     updateAuthUI();
