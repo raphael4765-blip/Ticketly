@@ -2,45 +2,46 @@
 const SUPABASE_URL = "https://lhmatsjxdkgoqubuezfi.supabase.co";
 const SUPABASE_KEY = "sb_publishable_jENZfb_D2Tws5sk3bkSkQA_BDvzdknA";
 
-let db = null;
+let db;
 let currentUser = null;
 let authMode = "signin";
 let activeCategory = "All";
 let allTickets = [];
-let activeConversation = null;
 let pendingSellerTicket = null;
-let toastTimer = null;
+let activeConversation = null;
 
 const $ = id => document.getElementById(id);
 
-const categoryName = value => {
-  const c = String(value || "").toLowerCase();
-  if (c.includes("football") || c.includes("sport")) return "Football";
-  if (c.includes("concert") || c.includes("music")) return "Concerts";
-  return "Other";
-};
-
-const escapeHTML = value => String(value ?? "").replace(/[&<>"']/g, ch => ({
-  "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
-}[ch]));
-
-function showNotice(message, error = false) {
-  const el = $("notice");
-  el.textContent = message;
-  el.classList.toggle("notice-error", error);
-  el.hidden = false;
-  clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => el.hidden = true, 5500);
-}
-
-function setMessage(id, message, error = false) {
+function message(id, text, error = false) {
   const el = $(id);
   if (!el) return;
-  el.textContent = message;
+  el.textContent = text;
   el.classList.toggle("error-text", error);
 }
 
-function openAuth(mode = authMode) {
+function notice(text, error = false) {
+  const el = $("notice");
+  if (!el) return;
+  el.textContent = text;
+  el.hidden = false;
+  el.classList.toggle("notice-error", error);
+}
+
+function safe(value) {
+  return String(value ?? "").replace(/[&<>"']/g, c => ({
+    "&": "&amp;", "<": "&lt;", ">": "&gt;",
+    '"': "&quot;", "'": "&#39;"
+  }[c]));
+}
+
+function category(value) {
+  const s = String(value || "").toLowerCase();
+  if (s.includes("football") || s.includes("sport")) return "Football";
+  if (s.includes("concert") || s.includes("music")) return "Concerts";
+  return "Other";
+}
+
+function openAuth(mode = "signin") {
   authMode = mode;
   $("authSection").hidden = false;
   document.body.classList.add("modal-open");
@@ -53,102 +54,87 @@ function closeAuth() {
 }
 
 function updateAuthUI() {
-  if (!$("openAuth")) return;
+  if (!$("authForm")) return;
 
-  const signed = !!currentUser;
+  const signedIn = !!currentUser;
+  $("openAuth").textContent = signedIn
+    ? currentUser.email : "Sign in / Sign up";
 
-  $("openAuth").textContent = signed
-    ? (currentUser.email || "My account")
-    : "Sign in / Sign up";
-
-  $("signOutButton").hidden = !signed;
-
-  $("authTitle").textContent = signed
+  $("authTitle").textContent = signedIn
     ? "Your account"
     : authMode === "signup" ? "Create account" : "Sign in";
 
   $("authSubmit").textContent =
     authMode === "signup" ? "Create account" : "Sign in";
 
-  $("authSubmit").hidden = signed;
-  $("authEmail").disabled = signed;
-  $("authPassword").disabled = signed;
-  $("authSwitch").hidden = signed;
+  $("authSubmit").hidden = signedIn;
+  $("authEmail").disabled = signedIn;
+  $("authPassword").disabled = signedIn;
+  $("authSwitch").hidden = signedIn;
+  $("signOutButton").hidden = !signedIn;
 
   $("authSwitch").textContent = authMode === "signup"
     ? "Already have an account? Sign in"
     : "Need an account? Sign up";
 
-  $("authMessage").textContent = signed
-    ? `Signed in as ${currentUser.email || "your account"}.`
-    : "Sign in or create an account to list tickets and message sellers.";
-
-  $("sellSubmit").disabled = !signed;
-  $("sellMessage").textContent = signed
-    ? ""
-    : "Sign in first to publish a ticket.";
-
-  $("messagesOpen").title = signed
-    ? "Open your messages"
-    : "Sign in to use messages";
+  $("sellSubmit").disabled = !signedIn;
+  $("sellMessage").textContent = signedIn
+    ? "" : "Sign in first to publish a ticket.";
 }
 
 function renderTickets() {
+  if (!$("ticketGrid")) return;
+
   const query = $("searchInput").value.trim().toLowerCase();
 
-  const filtered = allTickets.filter(t => {
-    const matches = activeCategory === "All" ||
-      categoryName(t.category) === activeCategory;
+  const tickets = allTickets.filter(t =>
+    (activeCategory === "All" || category(t.category) === activeCategory) &&
+    `${t.event_name} ${t.country} ${t.category} ${t.description || ""}`
+      .toLowerCase().includes(query)
+  );
 
-    return matches &&
-      `${t.event_name} ${t.country} ${t.category} ${t.description || ""}`
-        .toLowerCase().includes(query);
-  });
-
-  $("ticketGrid").innerHTML = filtered.map(t => {
-    const price = Number(t.price);
+  $("ticketGrid").innerHTML = tickets.map(t => {
     const date = t.event_date
-      ? new Date(t.event_date + "T12:00:00").toLocaleDateString(
-          undefined, { day: "numeric", month: "short", year: "numeric" })
+      ? new Date(t.event_date + "T12:00:00").toLocaleDateString()
       : "Date TBC";
 
     const image = t.image_url
-      ? `<img src="${escapeHTML(t.image_url)}" alt="Photo for ${escapeHTML(t.event_name)}" loading="lazy">`
-      : `<span>${categoryName(t.category) === "Football" ? "⚽" :
-          categoryName(t.category) === "Concerts" ? "🎤" : "🎟️"}</span>`;
+      ? `<img src="${safe(t.image_url)}" alt="Ticket photo" loading="lazy">`
+      : `<span>${category(t.category) === "Football" ? "⚽" :
+          category(t.category) === "Concerts" ? "🎤" : "🎟️"}</span>`;
 
-    return `<article class="ticket-card">
-      <div class="ticket-image">${image}</div>
-      <div class="ticket-card-body">
-        <div class="ticket-card-top">
-          <span class="ticket-category">${escapeHTML(categoryName(t.category))}</span>
-          <span class="ticket-date">${escapeHTML(date)}</span>
+    return `
+      <article class="ticket-card">
+        <div class="ticket-image">${image}</div>
+        <div class="ticket-card-body">
+          <div class="ticket-card-top">
+            <span class="ticket-category">${safe(category(t.category))}</span>
+            <span class="ticket-date">${safe(date)}</span>
+          </div>
+          <h3>${safe(t.event_name)}</h3>
+          <p class="ticket-country">📍 ${safe(t.country)}</p>
+          ${t.description
+            ? `<p class="ticket-description">${safe(t.description)}</p>` : ""}
+          <div class="ticket-card-bottom">
+            <strong>€${Number(t.price).toFixed(2)}</strong>
+            <span class="ticket-label">Listed ticket</span>
+          </div>
+          <div class="ticket-actions">
+            <button class="button button-primary" type="button"
+              data-message-seller="${safe(t.id)}">Message seller</button>
+          </div>
         </div>
-        <h3>${escapeHTML(t.event_name)}</h3>
-        <p class="ticket-country">📍 ${escapeHTML(t.country)}</p>
-        ${t.description ? `<p class="ticket-description">${escapeHTML(t.description)}</p>` : ""}
-        <div class="ticket-card-bottom">
-          <strong>€${Number.isFinite(price) ? price.toFixed(2) : "—"}</strong>
-          <span class="ticket-label">Listed ticket</span>
-        </div>
-        <div class="ticket-actions">
-          <button class="button button-primary" type="button"
-            data-message-seller="${escapeHTML(t.id)}">Message seller</button>
-        </div>
-      </div>
-    </article>`;
+      </article>`;
   }).join("");
 
   $("resultCount").textContent =
-    `${filtered.length} ${filtered.length === 1 ? "ticket" : "tickets"}`;
+    `${tickets.length} ${tickets.length === 1 ? "ticket" : "tickets"}`;
+  $("emptyMessage").hidden = tickets.length > 0;
 
-  $("emptyMessage").hidden = filtered.length !== 0;
-
-  document.querySelectorAll("[data-message-seller]").forEach(btn =>
-    btn.addEventListener("click", () =>
-      startSellerMessage(btn.dataset.messageSeller)
-    )
-  );
+  document.querySelectorAll("[data-message-seller]").forEach(button => {
+    button.addEventListener("click", () =>
+      startSellerMessage(button.dataset.messageSeller));
+  });
 }
 
 async function loadTickets() {
@@ -157,70 +143,36 @@ async function loadTickets() {
     .order("created_at", { ascending: false });
 
   if (error) throw error;
-
   allTickets = data || [];
   renderTickets();
-}
-
-async function startTicketly() {
-  try {
-    if (!window.supabase || !window.supabase.createClient) {
-      throw new Error("Supabase library did not load. Check your internet connection and refresh.");
-    }
-
-    db = window.supabase.createClient(
-      SUPABASE_URL,
-      SUPABASE_KEY,
-      {
-        auth: {
-          persistSession: true,
-          autoRefreshToken: true,
-          detectSessionInUrl: true
-        }
-      }
-    );
-
-    const { data, error } = await db.auth.getSession();
-    if (error) throw error;
-
-    currentUser = data.session?.user || null;
-    updateAuthUI();
-
-    db.auth.onAuthStateChange((_event, session) => {
-      currentUser = session?.user || null;
-      updateAuthUI();
-      if (currentUser) refreshUnreadCount();
-    });
-
-    await loadTickets();
-    $("notice").hidden = true;
-
-    if (currentUser) refreshUnreadCount();
-  } catch (e) {
-    console.error("Ticketly connection error:", e);
-    showNotice("Ticketly could not connect: " + e.message, true);
-    $("resultCount").textContent = "Could not load tickets";
-  }
 }
 
 async function submitAuth(event) {
   event.preventDefault();
 
-  if (!db) {
-    setMessage("authMessage", "Ticketly is still connecting. Refresh and try again.", true);
-    return;
-  }
-
   const email = $("authEmail").value.trim();
   const password = $("authPassword").value;
   const button = $("authSubmit");
 
-  button.disabled = true;
+  if (!db) {
+    message("authMessage", "Still connecting to Ticketly. Refresh and try again.", true);
+    return;
+  }
 
-  setMessage(
-    "authMessage",
-    authMode === "signup" ? "Creating your account…" : "Signing in…"
-  );
+  if (!email || !password) {
+    message("authMessage", "Enter your email and password.", true);
+    return;
+  }
+
+  if (authMode === "signup" && password.length < 6) {
+    message("authMessage", "Your password must be at least 6 characters.", true);
+    return;
+  }
+
+  button.disabled = true;
+  button.textContent = authMode === "signup"
+    ? "Creating account..." : "Signing in...";
+  message("authMessage", "Please wait...");
 
   try {
     if (authMode === "signup") {
@@ -238,15 +190,11 @@ async function submitAuth(event) {
         currentUser = data.user;
         updateAuthUI();
         closeAuth();
-        showNotice("Your account is ready! You are signed in.");
+        notice("Your account was created successfully!");
       } else {
-        // Email confirmation is required before the account can sign in.
-        currentUser = null;
-        updateAuthUI();
-
-        setMessage(
+        message(
           "authMessage",
-          "📧 Almost done! Go to your email inbox and click the verification link to activate your Ticketly account. Check your spam folder too. After verifying, return here and sign in."
+          "Account request received. If email confirmation is enabled in Supabase, check your inbox and spam folder, then sign in."
         );
       }
     } else {
@@ -260,13 +208,13 @@ async function submitAuth(event) {
       currentUser = data.user;
       updateAuthUI();
       closeAuth();
-      showNotice("Signed in successfully.");
-      await refreshUnreadCount();
+      notice("Signed in successfully!");
     }
-  } catch (e) {
-    setMessage(
+  } catch (error) {
+    console.error("Ticketly authentication error:", error);
+    message(
       "authMessage",
-      e.message || "Authentication failed.",
+      error.message || "Could not sign in. Please try again.",
       true
     );
   } finally {
@@ -276,19 +224,12 @@ async function submitAuth(event) {
 }
 
 async function signOut() {
-  if (!db) return;
-
   const { error } = await db.auth.signOut();
-
-  if (error) {
-    showNotice(error.message, true);
-    return;
-  }
+  if (error) return notice(error.message, true);
 
   currentUser = null;
-  activeConversation = null;
   updateAuthUI();
-  showNotice("Signed out.");
+  notice("You have signed out.");
 }
 
 async function publishTicket(event) {
@@ -296,39 +237,33 @@ async function publishTicket(event) {
 
   if (!currentUser) {
     openAuth("signin");
-    setMessage("authMessage", "Please sign in before publishing a ticket.");
     return;
   }
 
   const button = $("sellSubmit");
   button.disabled = true;
-  button.textContent = "Publishing…";
+  button.textContent = "Publishing...";
 
   let uploadedPath = null;
 
   try {
-    const file = $("ticketPhoto").files[0];
     let image_url = null;
+    const file = $("ticketPhoto")?.files?.[0];
 
     if (file) {
       if (!file.type.startsWith("image/")) {
-        throw new Error("Please choose an image file.");
+        throw new Error("Choose an image file.");
       }
-
       if (file.size > 5 * 1024 * 1024) {
         throw new Error("Images must be 5 MB or smaller.");
       }
 
-      const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
-      uploadedPath = `${currentUser.id}/${crypto.randomUUID()}-${safeName}`;
+      uploadedPath = `${currentUser.id}/${crypto.randomUUID()}-${file.name.replace(/[^a-zA-Z0-9._-]/g, "_")}`;
 
-      const up = await db.storage.from("ticket-photos").upload(
-        uploadedPath,
-        file,
-        { upsert: false, contentType: file.type }
+      const upload = await db.storage.from("ticket-photos").upload(
+        uploadedPath, file, { contentType: file.type }
       );
-
-      if (up.error) throw up.error;
+      if (upload.error) throw upload.error;
 
       image_url = db.storage.from("ticket-photos")
         .getPublicUrl(uploadedPath).data.publicUrl;
@@ -347,7 +282,7 @@ async function publishTicket(event) {
 
     if (!ticket.event_name || !ticket.country || !ticket.event_date ||
         !Number.isFinite(ticket.price) || ticket.price <= 0) {
-      throw new Error("Fill in all required fields and use a price above €0.");
+      throw new Error("Complete all required fields and enter a price above €0.");
     }
 
     const { error } = await db.from("tickets").insert(ticket);
@@ -355,16 +290,14 @@ async function publishTicket(event) {
 
     $("sellForm").reset();
     await loadTickets();
-    showNotice("Your ticket has been published!");
+    notice("Your ticket has been published!");
     $("tickets").scrollIntoView({ behavior: "smooth" });
-  } catch (e) {
+  } catch (error) {
     if (uploadedPath) {
       await db.storage.from("ticket-photos").remove([uploadedPath]);
     }
-
-    const msg = e.message || "Could not publish ticket.";
-    setMessage("sellMessage", msg, true);
-    showNotice("Could not publish ticket: " + msg, true);
+    message("sellMessage", error.message, true);
+    notice("Could not publish ticket: " + error.message, true);
   } finally {
     button.disabled = !currentUser;
     button.textContent = "Publish ticket";
@@ -374,7 +307,7 @@ async function publishTicket(event) {
 async function startSellerMessage(ticketId) {
   if (!currentUser) {
     openAuth("signin");
-    setMessage("authMessage", "Sign in to contact the seller.");
+    message("authMessage", "Sign in to contact the seller.");
     return;
   }
 
@@ -382,15 +315,15 @@ async function startSellerMessage(ticketId) {
   if (!ticket) return;
 
   if (ticket.user_id === currentUser.id) {
-    showNotice("This is your own listing.");
+    notice("This is your own listing.");
     return;
   }
 
   pendingSellerTicket = ticket;
   $("sellerModalTitle").textContent = "Message seller";
-  $("sellerTicketName").textContent = `About: ${ticket.event_name}`;
+  $("sellerTicketName").textContent = "About: " + ticket.event_name;
   $("sellerFirstMessage").value = "";
-  setMessage("sellerNotice", "");
+  message("sellerNotice", "");
   $("sellerModal").hidden = false;
   document.body.classList.add("modal-open");
 }
@@ -402,20 +335,20 @@ function closeSellerModal() {
 
 async function sendFirstMessage(event) {
   event.preventDefault();
-
   if (!currentUser || !pendingSellerTicket) return;
 
-  const text = $("sellerFirstMessage").value.trim();
-  if (!text) return;
+  const body = $("sellerFirstMessage").value.trim();
+  if (!body) return;
 
   try {
     const ticket = pendingSellerTicket;
+    const participants = [currentUser.id, ticket.user_id];
 
     const { data: existing, error: findError } = await db
       .from("conversations")
       .select("id")
       .eq("ticket_id", ticket.id)
-      .contains("participant_ids", [currentUser.id, ticket.user_id])
+      .contains("participant_ids", participants)
       .maybeSingle();
 
     if (findError) throw findError;
@@ -426,7 +359,7 @@ async function sendFirstMessage(event) {
       const { data, error } = await db.from("conversations")
         .insert({
           ticket_id: ticket.id,
-          participant_ids: [currentUser.id, ticket.user_id]
+          participant_ids: participants
         })
         .select("id")
         .single();
@@ -438,40 +371,22 @@ async function sendFirstMessage(event) {
     const { error } = await db.from("messages").insert({
       conversation_id: conversationId,
       sender_id: currentUser.id,
-      body: text
+      body
     });
-
     if (error) throw error;
 
     closeSellerModal();
-    $("messagesPanel").hidden = false;
-    document.body.classList.add("modal-open");
+    openMessages();
     await openConversation(conversationId);
-    showNotice("Message sent.");
-  } catch (e) {
-    setMessage("sellerNotice", e.message || "Could not send message.", true);
+    notice("Message sent!");
+  } catch (error) {
+    message("sellerNotice", error.message, true);
   }
-}
-
-async function refreshUnreadCount() {
-  if (!currentUser || !db) return;
-
-  const { count, error } = await db.from("messages")
-    .select("id", { count: "exact", head: true })
-    .neq("sender_id", currentUser.id)
-    .is("read_at", null);
-
-  if (!error) $("unreadCount").textContent = count ? `(${count})` : "";
 }
 
 async function loadConversations() {
   const list = $("conversationList");
-  list.innerHTML = "<p class='small-note'>Loading conversations…</p>";
-
-  if (!currentUser) {
-    list.innerHTML = "<p class='small-note'>Sign in to see your messages.</p>";
-    return;
-  }
+  list.innerHTML = "<p>Loading messages...</p>";
 
   const { data, error } = await db.from("conversations")
     .select("id,ticket_id,participant_ids,updated_at,tickets(event_name)")
@@ -479,8 +394,7 @@ async function loadConversations() {
 
   if (error) {
     list.innerHTML = "";
-    setMessage("messagesNotice", error.message, true);
-    return;
+    return message("messagesNotice", error.message, true);
   }
 
   const mine = (data || []).filter(c =>
@@ -488,19 +402,20 @@ async function loadConversations() {
   );
 
   if (!mine.length) {
-    list.innerHTML = "<p class='small-note'>No conversations yet. Open a ticket and choose “Message seller”.</p>";
+    list.innerHTML = "<p class='small-note'>No messages yet.</p>";
     return;
   }
 
-  list.innerHTML = mine.map(c =>
-    `<button class="conversation-item" type="button" data-conversation="${escapeHTML(c.id)}">
-      <strong>${escapeHTML(c.tickets?.event_name || "Ticket conversation")}</strong>
-      <span>Open conversation · ${new Date(c.updated_at).toLocaleDateString()}</span>
-    </button>`
-  ).join("");
+  list.innerHTML = mine.map(c => `
+    <button class="conversation-item" type="button"
+      data-conversation="${safe(c.id)}">
+      <strong>${safe(c.tickets?.event_name || "Ticket conversation")}</strong>
+      <span>Open conversation</span>
+    </button>`).join("");
 
-  list.querySelectorAll("[data-conversation]").forEach(b =>
-    b.addEventListener("click", () => openConversation(b.dataset.conversation))
+  list.querySelectorAll("[data-conversation]").forEach(button =>
+    button.addEventListener("click", () =>
+      openConversation(button.dataset.conversation))
   );
 }
 
@@ -508,53 +423,37 @@ async function openConversation(id) {
   activeConversation = id;
   $("conversationView").hidden = false;
   $("conversationList").hidden = true;
-  $("conversationMessages").innerHTML = "<p class='small-note'>Loading messages…</p>";
+  $("conversationMessages").innerHTML = "<p>Loading...</p>";
 
   const { data: convo, error: ce } = await db.from("conversations")
-    .select("id,participant_ids")
-    .eq("id", id)
-    .single();
+    .select("id,participant_ids").eq("id", id).single();
 
-  if (ce) {
-    setMessage("messagesNotice", ce.message, true);
-    return;
-  }
+  if (ce) return message("messagesNotice", ce.message, true);
 
-  if (!(convo.participant_ids || []).includes(currentUser.id)) {
-    setMessage("messagesNotice", "You do not have access to this conversation.", true);
-    return;
+  if (!convo.participant_ids.includes(currentUser.id)) {
+    return message("messagesNotice", "You cannot access this conversation.", true);
   }
 
   const { data, error } = await db.from("messages")
     .select("id,sender_id,body,created_at")
-    .eq("conversation_id", id)
-    .order("created_at", { ascending: true });
+    .eq("conversation_id", id).order("created_at");
 
-  if (error) {
-    setMessage("messagesNotice", error.message, true);
-    return;
-  }
+  if (error) return message("messagesNotice", error.message, true);
 
-  $("conversationMessages").innerHTML = (data || []).map(m =>
-    `<div class="message-bubble ${m.sender_id === currentUser.id ? "mine" : ""}">
-      ${escapeHTML(m.body)}
-      <span class="message-meta">${m.sender_id === currentUser.id ? "You" : "Seller / buyer"} · ${new Date(m.created_at).toLocaleString()}</span>
-    </div>`
-  ).join("") || "<p class='small-note'>No messages yet.</p>";
-
-  $("conversationMessages").scrollTop = $("conversationMessages").scrollHeight;
+  $("conversationMessages").innerHTML = (data || []).map(m => `
+    <div class="message-bubble ${m.sender_id === currentUser.id ? "mine" : ""}">
+      ${safe(m.body)}
+      <span class="message-meta">${m.sender_id === currentUser.id ? "You" : "Other user"} · ${new Date(m.created_at).toLocaleString()}</span>
+    </div>`).join("") || "<p>No messages yet.</p>";
 
   await db.from("messages").update({ read_at: new Date().toISOString() })
     .eq("conversation_id", id)
     .neq("sender_id", currentUser.id)
     .is("read_at", null);
-
-  refreshUnreadCount();
 }
 
 async function sendMessage(event) {
   event.preventDefault();
-
   if (!currentUser || !activeConversation) return;
 
   const body = $("messageInput").value.trim();
@@ -569,13 +468,12 @@ async function sendMessage(event) {
       sender_id: currentUser.id,
       body
     });
-
     if (error) throw error;
 
     $("messageInput").value = "";
     await openConversation(activeConversation);
-  } catch (e) {
-    setMessage("messagesNotice", e.message || "Could not send message.", true);
+  } catch (error) {
+    message("messagesNotice", error.message, true);
   } finally {
     button.disabled = false;
   }
@@ -584,7 +482,7 @@ async function sendMessage(event) {
 function openMessages() {
   if (!currentUser) {
     openAuth("signin");
-    setMessage("authMessage", "Sign in to use messages.");
+    message("authMessage", "Sign in to use messages.");
     return;
   }
 
@@ -592,7 +490,7 @@ function openMessages() {
   document.body.classList.add("modal-open");
   $("conversationList").hidden = false;
   $("conversationView").hidden = true;
-  setMessage("messagesNotice", "");
+  message("messagesNotice", "");
   loadConversations();
 }
 
@@ -602,37 +500,40 @@ function closeMessages() {
   activeConversation = null;
 }
 
-document.addEventListener("DOMContentLoaded", () => {
-  $("openAuth").addEventListener("click", () =>
-    openAuth(currentUser ? "signin" : authMode)
-  );
+document.addEventListener("DOMContentLoaded", async () => {
+  // Attach the form handlers first, so the buttons work as soon as the page loads.
+  $("authForm").addEventListener("submit", submitAuth);
 
+  $("authSubmit").type = "submit";
+  $("authForm").querySelectorAll("button").forEach(button => {
+    if (button.id !== "authSubmit") button.type = "button";
+  });
+
+  $("openAuth").addEventListener("click", () =>
+    openAuth(currentUser ? "signin" : "signin"));
   $("closeAuth").addEventListener("click", closeAuth);
   $("authBackdrop").addEventListener("click", closeAuth);
-  $("authForm").addEventListener("submit", submitAuth);
 
   $("authSwitch").addEventListener("click", () => {
     authMode = authMode === "signup" ? "signin" : "signup";
-    setMessage("authMessage", "");
+    message("authMessage", "");
     updateAuthUI();
   });
 
   $("signOutButton").addEventListener("click", signOut);
   $("sellForm").addEventListener("submit", publishTicket);
 
-  $("searchForm").addEventListener("submit", e => {
-    e.preventDefault();
+  $("searchForm").addEventListener("submit", event => {
+    event.preventDefault();
     renderTickets();
   });
-
   $("searchInput").addEventListener("input", renderTickets);
 
   document.querySelectorAll("[data-category]").forEach(button =>
     button.addEventListener("click", () => {
       activeCategory = button.dataset.category;
       document.querySelectorAll("[data-category]").forEach(item =>
-        item.classList.toggle("active", item === button)
-      );
+        item.classList.toggle("active", item === button));
       renderTickets();
     })
   );
@@ -640,7 +541,6 @@ document.addEventListener("DOMContentLoaded", () => {
   $("messagesOpen").addEventListener("click", openMessages);
   $("messagesClose").addEventListener("click", closeMessages);
   $("messagesBackdrop").addEventListener("click", closeMessages);
-
   $("backToConversations").addEventListener("click", () => {
     $("conversationView").hidden = true;
     $("conversationList").hidden = false;
@@ -652,13 +552,43 @@ document.addEventListener("DOMContentLoaded", () => {
   $("sellerBackdrop").addEventListener("click", closeSellerModal);
   $("sellerMessageForm").addEventListener("submit", sendFirstMessage);
 
-  document.addEventListener("keydown", e => {
-    if (e.key === "Escape") {
+  document.addEventListener("keydown", event => {
+    if (event.key === "Escape") {
       closeAuth();
       closeMessages();
       closeSellerModal();
     }
   });
 
-  startTicketly();
+  try {
+    if (!window.supabase?.createClient) {
+      throw new Error("Supabase did not load. Check your internet connection and refresh.");
+    }
+
+    db = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY, {
+      auth: {
+        persistSession: true,
+        autoRefreshToken: true,
+        detectSessionInUrl: true
+      }
+    });
+
+    const { data, error } = await db.auth.getSession();
+    if (error) throw error;
+
+    currentUser = data.session?.user || null;
+    updateAuthUI();
+
+    db.auth.onAuthStateChange((_event, session) => {
+      currentUser = session?.user || null;
+      updateAuthUI();
+    });
+
+    await loadTickets();
+    $("notice").hidden = true;
+  } catch (error) {
+    console.error("Ticketly startup error:", error);
+    notice("Ticketly connection error: " + error.message, true);
+    $("resultCount").textContent = "Could not load tickets";
+  }
 });
