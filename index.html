@@ -3,57 +3,116 @@
 <html lang="en" dir="ltr">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Ticketly</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Ticketly — The World, Live</title>
   <link rel="stylesheet" href="style.css">
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script defer src="script.js"></script>
 </head>
 <body>
-
-<header>
-  <a class="brand" href="#">TICKETLY</a>
+<header class="topbar">
+  <a class="brand" href="#">
+    <span class="brand-icon">✳</span>
+    TICKETLY<span class="orange">.</span>
+  </a>
   <nav>
-    <a href="#tickets">Tickets</a>
-    <a href="#memorabilia">Memorabilia</a>
-    <a href="#sell">Sell</a>
+    <a class="active" href="#">⌂ <span data-en="Home" data-he="בית">Home</span></a>
+    <a href="#tickets">◎ <span data-en="Explore" data-he="גילוי אירועים">Explore</span></a>
+    <a href="#sell">＋ <span data-en="Sell Tickets" data-he="מכירת כרטיסים">Sell Tickets</span></a>
+    <a href="#alerts">♧ <span data-en="My Alerts" data-he="ההתראות שלי">My Alerts</span></a>
+    <button id="messagesOpen">☏ <span data-en="Messages" data-he="הודעות">Messages</span></button>
+    <button id="openAuth"><span data-en="Profile" data-he="פרופיל">Profile</span></button>
+    <button id="signOut" hidden data-en="Sign out" data-he="התנתקות">Sign out</button>
   </nav>
-  <button id="lang">עברית</button>
-  <button id="messagesOpen">Messages</button>
-  <button id="openAuth">Sign in / Sign up</button>
-  <button id="signOut" hidden>Sign out</button>
+  <button id="lang" class="language">עברית</button>
 </header>
 
-<section class="hero">
-  <p>MADE FOR FANS</p>
-  <h1>Your next match.<br><span>Your next memory.</span></h1>
-  <p>Discover event tickets and football memorabilia from fans.</p>
-  <a class="btn" href="#tickets">Browse tickets</a>
-  <a class="btn alt" href="#memorabilia">Explore memorabilia</a>
-</section>
-
 <main>
-  <section id="tickets">
-    <h2>Tickets</h2>
-    <p>Find tickets for matches, concerts and events.</p>
-    <div class="tools">
-      <input id="ts" placeholder="Search tickets">
+  <section class="hero">
+    <div class="hero-copy">
+      <div class="eyebrow"><span></span><span data-en="THE WORLD, LIVE" data-he="העולם, בשידור חי">THE WORLD, LIVE</span></div>
+      <h1>
+        <span data-en="Be there" data-he="תהיו שם">Be there</span><br>
+        <span data-en="when " data-he="כשהרגע">when </span><span class="green" data-en="it" data-he="הוא">it</span><br>
+        <span class="green" data-en="happens." data-he="מתרחש.">happens.</span>
+      </h1>
+      <p data-en="The big nights. The once-in-a-lifetime days. Find your place in the crowd, wherever it is."
+         data-he="הלילות הגדולים. הרגעים של פעם בחיים. מצאו את המקום שלכם בקהל, בכל מקום בעולם.">
+        The big nights. The once-in-a-lifetime days. Find your place in the crowd, wherever it is.
+      </p>
+      <form id="heroSearch" class="searchbar">
+        <span class="search-icon">⌕</span>
+        <input id="heroQuery" placeholder="Artist, team, venue or city"
+          data-en-placeholder="Artist, team, venue or city"
+          data-he-placeholder="אמן, קבוצה, מקום או עיר">
+        <button type="submit" class="primary"
+          data-en="Find tickets →" data-he="מצאו כרטיסים ←">Find tickets →</button>
+      </form>
+      <div class="trust"><span>♧</span>
+        <span data-en="Independent listings from around the world"
+          data-he="מודעות עצמאיות מרחבי העולם">Independent listings from around the world</span>
+      </div>
+    </div>
+
+    <div class="poster-area">
+      <article class="poster poster-green">
+        <small>LONDON · 15 MAY 2027</small>
+        <div class="poster-circle"></div>
+        <div class="poster-content">
+          <span class="trophy">♜</span>
+          <strong data-en="NORTH<br>LONDON." data-he="צפון<br>לונדון.">NORTH<br>LONDON.</strong>
+        </div>
+        <small class="poster-bottom" data-en="THE CITY IS YOURS." data-he="העיר שלכם.">THE CITY IS YOURS.</small>
+      </article>
+      <article class="poster poster-orange">
+        <small>M. / 01</small>
+        <div class="poster-circle"></div>
+        <div class="poster-content">
+          <strong><span data-en="YOUR NEXT" data-he="הסיפור">YOUR NEXT</span><br>
+          <span class="light" data-en="story." data-he="הבא.">story.</span></strong>
+        </div>
+        <div class="stamp" data-en="LIVE<br>IT LOUD" data-he="לחיות<br>בעוצמה">LIVE<br>IT LOUD</div>
+        <small class="poster-bottom" data-en="FIND IT HERE →" data-he="מצאו את זה כאן ←">FIND IT HERE →</small>
+      </article>
+      <div class="poster-caption">
+        <span data-en="Where the world<br>comes to show up."
+          data-he="המקום שבו העולם<br>נפגש.">Where the world<br>comes to show up.</span>
+        <span class="worldwide">01 — 04<br>WORLDWIDE</span>
+      </div>
+    </div>
+  </section>
+
+  <section class="ticker">
+    <span>FOOTBALL</span> ✳ <span>LIVE MUSIC</span> ✳
+    <span>THEATRE</span> ✳ <span>MEMORABILIA</span> ✳
+    <span>FOOTBALL</span> ✳ <span>LIVE MUSIC</span>
+  </section>
+
+  <section id="tickets" class="market-section">
+    <div class="section-heading">
+      <div>
+        <div class="eyebrow"><span></span><span data-en="YOUR NEXT EXPERIENCE" data-he="החוויה הבאה שלכם">YOUR NEXT EXPERIENCE</span></div>
+        <h2 data-en="Find your <span class='green'>moment.</span>" data-he="מצאו את <span class='green'>הרגע שלכם.</span>">Find your <span class="green">moment.</span></h2>
+        <p data-en="From match day to the front row." data-he="מיום המשחק ועד לשורה הראשונה.">From match day to the front row.</p>
+      </div>
+    </div>
+    <div class="filters">
+      <input id="ts" placeholder="Search events..." data-en-placeholder="Search events..." data-he-placeholder="חיפוש אירועים...">
       <select id="tf">
-        <option>All</option>
-        <option>Football</option>
-        <option>Concerts</option>
-        <option>Other</option>
+        <option>All</option><option>Football</option><option>Concerts</option><option>Other</option>
       </select>
     </div>
     <div id="ticketGrid" class="grid"></div>
     <p id="ticketError" class="error"></p>
   </section>
 
-  <section id="memorabilia">
-    <h2>Memorabilia</h2>
-    <p>Match-worn shirts, signed items, boots and collectibles.</p>
-    <div class="tools">
-      <input id="ms" placeholder="Search memorabilia">
+  <section id="memorabilia" class="market-section memorabilia-section">
+    <div class="eyebrow"><span></span><span data-en="OWN A PIECE OF THE GAME" data-he="קחו חלק מהמשחק הביתה">OWN A PIECE OF THE GAME</span></div>
+    <h2 data-en="More than a <span class='green'>memory.</span>" data-he="יותר מ<span class='green'>מזכרת.</span>">More than a <span class="green">memory.</span></h2>
+    <p data-en="Discover signed shirts, match-worn gear and collectibles."
+       data-he="גלו חולצות חתומות, ציוד ממשחקים ופריטי אספנות.">Discover signed shirts, match-worn gear and collectibles.</p>
+    <div class="filters">
+      <input id="ms" placeholder="Search memorabilia..." data-en-placeholder="Search memorabilia..." data-he-placeholder="חיפוש מזכרות...">
       <select id="mf">
         <option>All</option>
         <option>Match-worn shirt</option>
@@ -66,82 +125,66 @@
     <p id="memError" class="error"></p>
   </section>
 
-  <section id="sell">
-    <h2>Sell to fans</h2>
-    <div class="forms">
+  <section id="sell" class="sell-section">
+    <div class="eyebrow"><span></span><span data-en="YOUR TICKETS. YOUR STORY." data-he="הכרטיסים שלכם. הסיפור שלכם.">YOUR TICKETS. YOUR STORY.</span></div>
+    <h2 data-en="Have something <span class='green'>to share?</span>" data-he="יש לכם משהו <span class='green'>למכור?</span>">Have something <span class="green">to share?</span></h2>
+    <p data-en="List tickets or memorabilia for fellow fans." data-he="פרסמו כרטיסים או מזכרות לאוהדים אחרים.">List tickets or memorabilia for fellow fans.</p>
 
+    <div class="forms">
       <form id="ticketForm" class="panel">
-        <h3>List a ticket</h3>
-        <label>Event name
+        <h3 data-en="Sell a ticket" data-he="מכירת כרטיס">Sell a ticket</h3>
+        <label><span data-en="Event name" data-he="שם האירוע">Event name</span>
           <input id="eventName" required maxlength="120">
         </label>
         <div class="two">
-          <label>Category
-            <select id="eventCategory">
-              <option>Football</option>
-              <option>Concerts</option>
-              <option>Other</option>
-            </select>
+          <label><span data-en="Category" data-he="קטגוריה">Category</span>
+            <select id="eventCategory"><option>Football</option><option>Concerts</option><option>Other</option></select>
           </label>
-          <label>Country
-            <input id="eventCountry" required>
-          </label>
+          <label><span data-en="Country" data-he="מדינה">Country</span><input id="eventCountry" required></label>
         </div>
         <div class="two">
-          <label>Event date
-            <input id="eventDate" type="date" required>
-          </label>
-          <label>Price (€)
-            <input id="ticketPrice" type="number" min=".01" step=".01" required>
-          </label>
+          <label><span data-en="Event date" data-he="תאריך האירוע">Event date</span><input id="eventDate" type="date" required></label>
+          <label><span data-en="Price (€)" data-he="מחיר (€)">Price (€)</span><input id="ticketPrice" type="number" min=".01" step=".01" required></label>
         </div>
-        <label>Details
-          <textarea id="ticketDescription" maxlength="1000"></textarea>
-        </label>
-        <label>Photo
-          <input id="ticketPhoto" type="file" accept="image/*">
-        </label>
-        <button class="btn" id="ticketSubmit">Publish ticket</button>
+        <label><span data-en="Description" data-he="תיאור">Description</span><textarea id="ticketDescription" maxlength="1000"></textarea></label>
+        <label><span data-en="Photo" data-he="תמונה">Photo</span><input id="ticketPhoto" type="file" accept="image/*"></label>
+        <button class="primary full" id="ticketSubmit" data-en="Publish ticket" data-he="פרסום כרטיס">Publish ticket</button>
         <p id="ticketMsg"></p>
       </form>
 
       <form id="memForm" class="panel">
-        <h3>List memorabilia</h3>
-        <label>Item title
-          <input id="memTitle" required maxlength="120">
-        </label>
+        <h3 data-en="Sell memorabilia" data-he="מכירת מזכרות">Sell memorabilia</h3>
+        <label><span data-en="Item title" data-he="שם הפריט">Item title</span><input id="memTitle" required maxlength="120"></label>
         <div class="two">
-          <label>Item type
-            <select id="memCategory">
-              <option>Match-worn shirt</option>
-              <option>Signed item</option>
-              <option>Boots</option>
-              <option>Other</option>
-            </select>
+          <label><span data-en="Item type" data-he="סוג הפריט">Item type</span>
+            <select id="memCategory"><option>Match-worn shirt</option><option>Signed item</option><option>Boots</option><option>Other</option></select>
           </label>
-          <label>Country
-            <input id="memCountry" required>
-          </label>
+          <label><span data-en="Country" data-he="מדינה">Country</span><input id="memCountry" required></label>
         </div>
-        <label>Price (€)
-          <input id="memPrice" type="number" min=".01" step=".01" required>
-        </label>
-        <label>Details
-          <textarea id="memDescription" maxlength="1000"></textarea>
-        </label>
-        <label>Photo
-          <input id="memPhoto" type="file" accept="image/*">
-        </label>
-        <button class="btn" id="memSubmit">Publish item</button>
+        <label><span data-en="Price (€)" data-he="מחיר (€)">Price (€)</span><input id="memPrice" type="number" min=".01" step=".01" required></label>
+        <label><span data-en="Description" data-he="תיאור">Description</span><textarea id="memDescription" maxlength="1000"></textarea></label>
+        <label><span data-en="Photo" data-he="תמונה">Photo</span><input id="memPhoto" type="file" accept="image/*"></label>
+        <button class="primary full" id="memSubmit" data-en="Publish item" data-he="פרסום פריט">Publish item</button>
         <p id="memMsg"></p>
       </form>
-
     </div>
+  </section>
+
+  <section id="alerts" class="alerts-section">
+    <div>
+      <div class="eyebrow"><span></span><span data-en="DON'T MISS YOUR TEAM" data-he="אל תפספסו את הקבוצה שלכם">DON'T MISS YOUR TEAM</span></div>
+      <h2 data-en="Your team. Your <span class='green'>alerts.</span>" data-he="הקבוצה שלכם. <span class='green'>ההתראות שלכם.</span>">Your team. Your <span class="green">alerts.</span></h2>
+      <p data-en="Create an account to follow the events that matter to you."
+         data-he="צרו חשבון כדי לעקוב אחרי האירועים החשובים לכם.">Create an account to follow the events that matter to you.</p>
+      <button class="primary" onclick="document.getElementById('openAuth').click()" data-en="Get started →" data-he="מתחילים ←">Get started →</button>
+    </div>
+    <div class="alert-symbol">↗</div>
   </section>
 </main>
 
 <footer>
-  Ticketly · Verify sellers and items before paying.
+  <a class="brand" href="#">TICKETLY<span class="orange">.</span></a>
+  <span data-en="Made for fans, everywhere." data-he="נוצר עבור אוהדים, בכל מקום.">Made for fans, everywhere.</span>
 </footer>
 
 <div class="modal" id="authModal" hidden>
@@ -149,15 +192,11 @@
     <button class="x" data-close="authModal">×</button>
     <h2 id="authTitle">Sign in</h2>
     <form id="authForm">
-      <label>Email
-        <input id="email" type="email" required>
-      </label>
-      <label>Password
-        <input id="password" type="password" minlength="6" required>
-      </label>
-      <button class="btn" id="authSubmit">Sign in</button>
+      <label>Email<input id="email" type="email" required></label>
+      <label>Password<input id="password" type="password" minlength="6" required></label>
+      <button class="primary full" id="authSubmit">Sign in</button>
     </form>
-    <button id="switchAuth">Need an account? Sign up</button>
+    <button id="switchAuth" class="text-button">Need an account? Sign up</button>
     <p id="authMsg"></p>
   </div>
 </div>
@@ -168,7 +207,7 @@
     <h2 id="contactTitle">Message seller</h2>
     <form id="contactForm">
       <textarea id="firstMessage" required maxlength="2000" placeholder="Write a message"></textarea>
-      <button class="btn">Send message</button>
+      <button class="primary full">Send message</button>
     </form>
     <p id="contactMsg"></p>
   </div>
@@ -177,20 +216,69 @@
 <div class="modal" id="messagesModal" hidden>
   <div class="dialog wide">
     <button class="x" data-close="messagesModal">×</button>
-    <h2>Messages</h2>
+    <h2>Messages / הודעות</h2>
     <div id="conversationList"></div>
     <div id="chat" hidden>
       <div id="chatBody"></div>
       <form id="replyForm">
         <input id="replyText" required maxlength="2000" placeholder="Write a reply">
-        <button class="btn">Send</button>
+        <button class="primary">Send</button>
       </form>
     </div>
     <p id="messagesMsg"></p>
   </div>
 </div>
-
 <div id="toast" hidden></div>
 
+<script>
+(() => {
+  let language = "en";
+
+  function setLanguage(next) {
+    language = next;
+    document.documentElement.lang = next;
+    document.documentElement.dir = next === "he" ? "rtl" : "ltr";
+
+    document.querySelectorAll("[data-en][data-he]").forEach(el => {
+      el.innerHTML = el.dataset[next];
+    });
+
+    document.querySelectorAll("[data-en-placeholder][data-he-placeholder]").forEach(el => {
+      el.placeholder = el.dataset[next + "Placeholder"];
+    });
+
+    const translations = {
+      "All": "הכול",
+      "Football": "כדורגל",
+      "Concerts": "הופעות",
+      "Other": "אחר",
+      "Match-worn shirt": "חולצת משחק",
+      "Signed item": "פריט חתום",
+      "Boots": "נעלי כדורגל"
+    };
+
+    document.querySelectorAll("select option").forEach(option => {
+      if (!option.dataset.original) option.dataset.original = option.textContent;
+      option.textContent = next === "he"
+        ? (translations[option.dataset.original] || option.dataset.original)
+        : option.dataset.original;
+    });
+
+    document.getElementById("lang").textContent = next === "he" ? "English" : "עברית";
+  }
+
+  document.getElementById("lang").addEventListener("click", () => {
+    setLanguage(language === "en" ? "he" : "en");
+  });
+
+  document.getElementById("heroSearch").addEventListener("submit", event => {
+    event.preventDefault();
+    const query = document.getElementById("heroQuery").value;
+    document.getElementById("ts").value = query;
+    if (typeof window.render === "function") window.render("ticket");
+    document.getElementById("tickets").scrollIntoView({behavior: "smooth"});
+  });
+})();
+</script>
 </body>
 </html>
