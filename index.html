@@ -1,147 +1,196 @@
 
 <!doctype html>
-<html lang="en">
+<html lang="en" dir="ltr">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Ticketly — Find your next event</title>
+  <title>Ticketly</title>
   <link rel="stylesheet" href="style.css">
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script defer src="script.js"></script>
 </head>
 <body>
-<header class="site-header">
-  <a class="brand" href="#"><span class="brand-mark">T</span> Ticketly</a>
-  <nav><a href="#tickets">Explore</a><a href="#sell">Sell tickets</a></nav>
-  <div class="header-actions">
-    <button id="messagesOpen" class="button button-quiet" type="button">Messages <span id="unreadCount"></span></button>
-    <button id="openAuth" class="button button-primary" type="button">Sign in / Sign up</button>
-    <button id="signOutButton" class="button button-quiet" type="button" hidden>Sign out</button>
-  </div>
+
+<header>
+  <a class="brand" href="#">TICKETLY</a>
+  <nav>
+    <a href="#tickets">Tickets</a>
+    <a href="#memorabilia">Memorabilia</a>
+    <a href="#sell">Sell</a>
+  </nav>
+  <button id="lang">עברית</button>
+  <button id="messagesOpen">Messages</button>
+  <button id="openAuth">Sign in / Sign up</button>
+  <button id="signOut" hidden>Sign out</button>
 </header>
 
+<section class="hero">
+  <p>MADE FOR FANS</p>
+  <h1>Your next match.<br><span>Your next memory.</span></h1>
+  <p>Discover event tickets and football memorabilia from fans.</p>
+  <a class="btn" href="#tickets">Browse tickets</a>
+  <a class="btn alt" href="#memorabilia">Explore memorabilia</a>
+</section>
+
 <main>
-  <section class="hero">
-    <div class="hero-copy">
-      <span class="eyebrow">YOUR NEXT EXPERIENCE STARTS HERE</span>
-      <h1>Find your people.<br><span>Find your event.</span></h1>
-      <p>Explore football matches, live music and unforgettable events around the world.</p>
-      <a class="button button-primary button-large" href="#tickets">Explore tickets ↘</a>
-      <div class="hero-proof">● Discover listings from event fans worldwide</div>
+  <section id="tickets">
+    <h2>Tickets</h2>
+    <p>Find tickets for matches, concerts and events.</p>
+    <div class="tools">
+      <input id="ts" placeholder="Search tickets">
+      <select id="tf">
+        <option>All</option>
+        <option>Football</option>
+        <option>Concerts</option>
+        <option>Other</option>
+      </select>
     </div>
-    <div class="hero-art">
-      <div class="art-card art-card-back"><span>LIVE MUSIC</span><strong>Feel<br>the moment.</strong><i>♫</i></div>
-      <div class="art-card art-card-front"><span>FOOTBALL</span><strong>Be there<br>for the roar.</strong><i>⚽</i></div>
-      <div class="art-stamp">YOUR<br>WORLD.<br>YOUR<br>TICKETS.</div>
-    </div>
+    <div id="ticketGrid" class="grid"></div>
+    <p id="ticketError" class="error"></p>
   </section>
 
-  <section class="section" id="tickets">
-    <div class="section-heading">
-      <div><span class="eyebrow">THE MARKETPLACE</span><h2>Find your next ticket</h2><p>Search events by name, category or country.</p></div>
-      <span class="live-pill">● Live listings</span>
+  <section id="memorabilia">
+    <h2>Memorabilia</h2>
+    <p>Match-worn shirts, signed items, boots and collectibles.</p>
+    <div class="tools">
+      <input id="ms" placeholder="Search memorabilia">
+      <select id="mf">
+        <option>All</option>
+        <option>Match-worn shirt</option>
+        <option>Signed item</option>
+        <option>Boots</option>
+        <option>Other</option>
+      </select>
     </div>
-    <form id="searchForm" class="search-bar">
-      <span class="search-icon">⌕</span>
-      <input id="searchInput" type="search" placeholder="Search events, countries..." aria-label="Search tickets">
-      <button class="button button-primary" type="submit">Search</button>
-    </form>
-    <div class="category-row">
-      <button class="category-chip active" type="button" data-category="All">All events</button>
-      <button class="category-chip" type="button" data-category="Football">⚽ Football</button>
-      <button class="category-chip" type="button" data-category="Concerts">🎤 Concerts</button>
-      <button class="category-chip" type="button" data-category="Other">✨ Other</button>
-    </div>
-    <div class="results-line"><span id="resultCount">Loading tickets…</span><span>Prices in EUR (€)</span></div>
-    <div id="ticketGrid" class="ticket-grid"></div>
-    <div id="emptyMessage" class="empty-state" hidden><div>✦</div><h3>No tickets found</h3><p>Try another search, or list this event.</p></div>
+    <div id="memGrid" class="grid"></div>
+    <p id="memError" class="error"></p>
   </section>
 
-  <section class="sell-section" id="sell">
-    <div class="sell-copy">
-      <span class="eyebrow">GOT A SPARE TICKET?</span>
-      <h2>Give your ticket<br>another story.</h2>
-      <p>List an event ticket for fans looking for their next experience.</p>
-      <div class="sell-note">✓ Listings are shared with Ticketly visitors worldwide.</div>
+  <section id="sell">
+    <h2>Sell to fans</h2>
+    <div class="forms">
+
+      <form id="ticketForm" class="panel">
+        <h3>List a ticket</h3>
+        <label>Event name
+          <input id="eventName" required maxlength="120">
+        </label>
+        <div class="two">
+          <label>Category
+            <select id="eventCategory">
+              <option>Football</option>
+              <option>Concerts</option>
+              <option>Other</option>
+            </select>
+          </label>
+          <label>Country
+            <input id="eventCountry" required>
+          </label>
+        </div>
+        <div class="two">
+          <label>Event date
+            <input id="eventDate" type="date" required>
+          </label>
+          <label>Price (€)
+            <input id="ticketPrice" type="number" min=".01" step=".01" required>
+          </label>
+        </div>
+        <label>Details
+          <textarea id="ticketDescription" maxlength="1000"></textarea>
+        </label>
+        <label>Photo
+          <input id="ticketPhoto" type="file" accept="image/*">
+        </label>
+        <button class="btn" id="ticketSubmit">Publish ticket</button>
+        <p id="ticketMsg"></p>
+      </form>
+
+      <form id="memForm" class="panel">
+        <h3>List memorabilia</h3>
+        <label>Item title
+          <input id="memTitle" required maxlength="120">
+        </label>
+        <div class="two">
+          <label>Item type
+            <select id="memCategory">
+              <option>Match-worn shirt</option>
+              <option>Signed item</option>
+              <option>Boots</option>
+              <option>Other</option>
+            </select>
+          </label>
+          <label>Country
+            <input id="memCountry" required>
+          </label>
+        </div>
+        <label>Price (€)
+          <input id="memPrice" type="number" min=".01" step=".01" required>
+        </label>
+        <label>Details
+          <textarea id="memDescription" maxlength="1000"></textarea>
+        </label>
+        <label>Photo
+          <input id="memPhoto" type="file" accept="image/*">
+        </label>
+        <button class="btn" id="memSubmit">Publish item</button>
+        <p id="memMsg"></p>
+      </form>
+
     </div>
-    <form id="sellForm" class="panel-form">
-      <div class="form-top"><h3>List a ticket</h3><p>Sign in to publish your listing.</p></div>
-      <label>Event name<input id="eventName" required maxlength="120" placeholder="e.g. Arsenal vs Chelsea"></label>
-      <div class="form-grid">
-        <label>Category<select id="eventCategory" required><option value="Football">Football</option><option value="Concerts">Concerts</option><option value="Other">Other</option></select></label>
-        <label>Country<input id="eventCountry" required maxlength="80" placeholder="e.g. England"></label>
-      </div>
-      <div class="form-grid">
-        <label>Event date<input id="eventDate" type="date" required></label>
-        <label>Price (€)<input id="ticketPrice" type="number" min="0.01" step="0.01" required placeholder="85.00"></label>
-      </div>
-      <label>Details (optional)<textarea id="ticketDescription" rows="3" maxlength="1000" placeholder="Seat details, ticket type, or useful information"></textarea></label>
-      <label>Ticket photo (optional)<input id="ticketPhoto" type="file" accept="image/*"></label>
-      <p class="small-note">Only upload images you have the right to share. Hide barcodes and personal information.</p>
-      <button id="sellSubmit" class="button button-primary button-full" type="submit">Publish ticket</button>
-      <div id="sellMessage" class="inline-message" role="status"></div>
-    </form>
   </section>
 </main>
 
 <footer>
-  <a class="brand" href="#"><span class="brand-mark">T</span> Ticketly</a>
-  <span>Made for fans, everywhere.</span>
-  <span>Always verify tickets and sellers before paying.</span>
+  Ticketly · Verify sellers and items before paying.
 </footer>
 
-<div id="authSection" class="overlay" hidden>
-  <button id="authBackdrop" class="overlay-backdrop" aria-label="Close dialog" type="button"></button>
-  <section class="dialog" role="dialog" aria-modal="true" aria-labelledby="authTitle">
-    <button id="closeAuth" class="dialog-close" type="button" aria-label="Close">×</button>
-    <span class="eyebrow">WELCOME TO TICKETLY</span>
+<div class="modal" id="authModal" hidden>
+  <div class="dialog">
+    <button class="x" data-close="authModal">×</button>
     <h2 id="authTitle">Sign in</h2>
-    <p class="dialog-intro">Sign in or create an account to list tickets and message sellers.</p>
     <form id="authForm">
-      <label>Email address<input id="authEmail" type="email" autocomplete="email" required placeholder="you@example.com"></label>
-      <label>Password<input id="authPassword" type="password" autocomplete="current-password" minlength="6" required placeholder="At least 6 characters"></label>
-      <button id="authSubmit" class="button button-primary button-full" type="submit">Sign in</button>
+      <label>Email
+        <input id="email" type="email" required>
+      </label>
+      <label>Password
+        <input id="password" type="password" minlength="6" required>
+      </label>
+      <button class="btn" id="authSubmit">Sign in</button>
     </form>
-    <button id="authSwitch" class="text-button" type="button">Need an account? Sign up</button>
-    <p id="authMessage" class="inline-message" role="status"></p>
-  </section>
+    <button id="switchAuth">Need an account? Sign up</button>
+    <p id="authMsg"></p>
+  </div>
 </div>
 
-<div id="messagesPanel" class="overlay" hidden>
-  <button id="messagesBackdrop" class="overlay-backdrop" aria-label="Close messages" type="button"></button>
-  <section class="dialog messages-dialog" role="dialog" aria-modal="true" aria-labelledby="messagesTitle">
-    <button id="messagesClose" class="dialog-close" type="button" aria-label="Close">×</button>
-    <span class="eyebrow">TALK TO OTHER FANS</span>
-    <h2 id="messagesTitle">Your messages</h2>
-    <p class="dialog-intro">Choose a conversation to read and reply.</p>
-    <div id="conversationList" class="conversation-list"></div>
-    <div id="conversationView" class="conversation-view" hidden>
-      <button id="backToConversations" class="text-button" type="button">← All conversations</button>
-      <div id="conversationMessages" class="message-list"></div>
-      <form id="messageForm" class="message-compose">
-        <input id="messageInput" maxlength="2000" required placeholder="Write a message…" aria-label="Message">
-        <button class="button button-primary" type="submit">Send</button>
+<div class="modal" id="contactModal" hidden>
+  <div class="dialog">
+    <button class="x" data-close="contactModal">×</button>
+    <h2 id="contactTitle">Message seller</h2>
+    <form id="contactForm">
+      <textarea id="firstMessage" required maxlength="2000" placeholder="Write a message"></textarea>
+      <button class="btn">Send message</button>
+    </form>
+    <p id="contactMsg"></p>
+  </div>
+</div>
+
+<div class="modal" id="messagesModal" hidden>
+  <div class="dialog wide">
+    <button class="x" data-close="messagesModal">×</button>
+    <h2>Messages</h2>
+    <div id="conversationList"></div>
+    <div id="chat" hidden>
+      <div id="chatBody"></div>
+      <form id="replyForm">
+        <input id="replyText" required maxlength="2000" placeholder="Write a reply">
+        <button class="btn">Send</button>
       </form>
     </div>
-    <p id="messagesNotice" class="inline-message" role="status"></p>
-  </section>
+    <p id="messagesMsg"></p>
+  </div>
 </div>
 
-<div id="sellerModal" class="overlay" hidden>
-  <button id="sellerBackdrop" class="overlay-backdrop" aria-label="Close" type="button"></button>
-  <section class="dialog" role="dialog" aria-modal="true" aria-labelledby="sellerModalTitle">
-    <button id="sellerClose" class="dialog-close" type="button" aria-label="Close">×</button>
-    <span class="eyebrow">CONTACT THE SELLER</span>
-    <h2 id="sellerModalTitle">Message seller</h2>
-    <p id="sellerTicketName" class="dialog-intro"></p>
-    <form id="sellerMessageForm">
-      <label>Your message<textarea id="sellerFirstMessage" rows="4" required maxlength="2000" placeholder="Hi, is this ticket still available?"></textarea></label>
-      <button class="button button-primary button-full" type="submit">Send message</button>
-    </form>
-    <p id="sellerNotice" class="inline-message" role="status"></p>
-  </section>
-</div>
+<div id="toast" hidden></div>
 
-<div id="notice" class="toast" role="status" hidden></div>
 </body>
 </html>
