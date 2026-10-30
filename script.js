@@ -1,949 +1,113 @@
-
-"use strict";
-
 const SUPABASE_URL = "https://lhmatsjxdkgoqubuezfi.supabase.co";
 const SUPABASE_KEY = "sb_publishable_jENZfb_D2Tws5sk3bkSkQA_BDvzdknA";
 
-let db = null;
-let currentUser = null;
-let authMode = "signin";
-let tickets = [];
-let memorabilia = [];
-let selectedSeller = null;
-let activeConversation = null;
-let teams = [];
-let activeSport = "Football";
-
+let db, currentUser=null, authMode="signin", tickets=[], memorabilia=[], selectedSeller=null, selectedItem=null, activeConversation=null;
 const $ = id => document.getElementById(id);
+const safe = v => String(v ?? "").replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+function say(id,msg,error=false){const el=$(id); if(el){el.textContent=msg;el.classList.toggle('error-text',error)}}
+function modal(id,show=true){const el=$(id);if(el)el.hidden=!show;document.body.classList.toggle('modal-open',show)}
+function toast(msg){const el=$('toast');if(el){el.textContent=msg;el.hidden=false;setTimeout(()=>el.hidden=true,3500)}}
+function category(v){const s=String(v||'').toLowerCase();if(s.includes('football')||s.includes('sport')||s.includes('soccer'))return 'Football';if(s.includes('basket'))return 'Basketball';if(s.includes('tennis'))return 'Tennis';return 'Other'}
+function showPage(id){document.querySelectorAll('.market-section,.sell-section,.alerts-section,.hero,.ticker').forEach(x=>x.hidden=true);const target=$(id);if(target)target.hidden=false;if(id==='home'&&$('ticker'))$('ticker').hidden=false;document.querySelectorAll('[data-page]').forEach(b=>b.classList.toggle('active',b.dataset.page===id));if(id==='tickets')renderTickets();if(id==='memorabilia')renderMemorabilia();if(id==='teamHub')loadClubDirectory();if(id==='reviews')loadCommunityReviews();window.scrollTo({top:0,behavior:'smooth'})}
+function updateAuth(){const signed=!!currentUser;const open=$('openAuth');if(open)open.textContent=signed?(currentUser.email||'Profile'):'Profile / Sign in';if($('signOut'))$('signOut').hidden=!signed;if($('authTitle'))$('authTitle').textContent=signed?'Your account':authMode==='signup'?'Create account':'Sign in';if($('authSubmit')){$('authSubmit').textContent=authMode==='signup'?'Create account':'Sign in';$('authSubmit').hidden=signed}if($('email'))$('email').disabled=signed;if($('password'))$('password').disabled=signed;if($('switchAuth'))$('switchAuth').hidden=signed;if($('authMsg')&&!$('authMsg').textContent)$('authMsg').textContent=signed?`Signed in as ${currentUser.email}`:'Sign in or create an account.'}
+async function authSubmit(e){e.preventDefault();if(!db)return say('authMsg','Still connecting to the account service. Refresh and try again.',true);const email=$('email').value.trim(),password=$('password').value; say('authMsg','Please wait…');$('authSubmit').disabled=true;try{if(authMode==='signup'){const {data,error}=await db.auth.signUp({email,password});if(error)throw error;if(data.session){currentUser=data.user; say('authMsg','Account created and signed in.');updateAuth()}else{say('authMsg','Account request created. If email confirmation is enabled in Supabase, confirm your email before signing in.')}}else{const {data,error}=await db.auth.signInWithPassword({email,password});if(error)throw error;currentUser=data.user;updateAuth();say('authMsg','Signed in successfully.');setTimeout(()=>modal('authModal',false),700)}}catch(err){console.error(err);say('authMsg',err.message||'Account action failed. Please try again.',true)}finally{$('authSubmit').disabled=false}}
+async function signOut(){if(!db)return;const {error}=await db.auth.signOut();if(error)return toast(error.message);currentUser=null;updateAuth();toast('Signed out.')}
+function dateText(v){if(!v)return 'Date not specified';const d=new Date(v+'T12:00:00');return isNaN(d)?safe(v):d.toLocaleDateString(undefined,{day:'numeric',month:'short',year:'numeric'})}
+function card(item,type){const title=type==='ticket'?item.event_name:item.title;const place=item.country||'';const price=Number(item.price);const image=item.image_url?`<img src="${safe(item.image_url)}" alt="${safe(title)}">`:`<div class="card-placeholder">${type==='ticket'?'⚽':'★'}</div>`;return `<article class="ticket-card listing-card" tabindex="0" role="button" data-open-type="${type}" data-open-id="${safe(item.id)}">${image}<div class="ticket-card-inner"><div class="ticket-card-top"><span class="ticket-category">${safe(type==='ticket'?category(item.category):(item.category||'Memorabilia'))}</span><span class="ticket-date">${type==='ticket'?safe(dateText(item.event_date)):'Collectible'}</span></div><h3>${safe(title||'Untitled listing')}</h3><p class="ticket-country">📍 ${safe(place)}</p><div class="ticket-card-bottom"><strong>€${Number.isFinite(price)?price.toFixed(2):'—'}</strong><span class="ticket-label">View details →</span></div></div></article>`}
+function renderTickets(){const grid=$('ticketGrid');if(!grid)return;const q=($('ts')?.value||'').toLowerCase(),f=$('tf')?.value||'All';const rows=tickets.filter(t=>['Football','Basketball','Tennis','Other'].includes(category(t.category))&&(f==='All'||category(t.category)===f)&&`${t.event_name} ${t.country} ${t.description||''}`.toLowerCase().includes(q));grid.innerHTML=rows.map(t=>card(t,'ticket')).join('');if(!rows.length)grid.innerHTML='<p>No sports tickets found yet. Try another search or list the first ticket.</p>'}
+function renderMemorabilia(){const grid=$('memGrid');if(!grid)return;const q=($('ms')?.value||'').toLowerCase(),f=$('mf')?.value||'All';const rows=memorabilia.filter(m=>(f==='All'||m.category===f)&&`${m.title} ${m.country} ${m.description||''} ${m.category||''}`.toLowerCase().includes(q));grid.innerHTML=rows.map(m=>card(m,'mem')).join('');if(!rows.length)grid.innerHTML='<p>No memorabilia listings found yet. Be the first to list one.</p>'}
+async function loadTickets(){const {data,error}=await db.from('tickets').select('*').order('created_at',{ascending:false});if(error)throw error;tickets=(data||[]).filter(t=>['Football','Basketball','Tennis','Other'].includes(category(t.category)));renderTickets()}
+async function loadMemorabilia(){const {data,error}=await db.from('memorabilia').select('*').order('created_at',{ascending:false});if(error){memorabilia=[];say('memError','Memorabilia table is not available yet. Run the provided setup SQL in Supabase.',true);renderMemorabilia();return}memorabilia=data||[];say('memError','');renderMemorabilia()}
+async function uploadPhoto(input){const file=input?.files?.[0];if(!file)return null;if(!currentUser)throw Error('Please sign in before uploading a photo.');if(file.size>5*1024*1024)throw Error('Please choose an image smaller than 5 MB.');const ext=(file.name.split('.').pop()||'jpg').replace(/[^a-z0-9]/gi,'').toLowerCase()||'jpg';const path=`${currentUser.id}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;const {error}=await db.storage.from('ticket-photos').upload(path,file,{upsert:false,contentType:file.type||'image/jpeg'});if(error)throw error;const {data}=db.storage.from('ticket-photos').getPublicUrl(path);return data.publicUrl}
+async function publish(e,type){e.preventDefault();if(!currentUser){authMode='signin';updateAuth();modal('authModal');return say(type==='ticket'?'ticketMsg':'memMsg','Please sign in before publishing.',true)}const isT=type==='ticket',form=isT?'ticketForm':'memForm',msg=isT?'ticketMsg':'memMsg',btn=$(isT?'ticketSubmit':'memSubmit');btn.disabled=true;say(msg,'Publishing…');try{const image_url=await uploadPhoto($(isT?'ticketPhoto':'memPhoto'));let row;if(isT){row={event_name:$('eventName').value.trim(),category:$('eventCategory').value,country:$('eventCountry').value.trim(),event_date:$('eventDate').value,price:Number($('ticketPrice').value),description:$('ticketDescription').value.trim(),image_url,user_id:currentUser.id}}else{row={title:$('memTitle').value.trim(),category:$('memCategory').value,country:$('memCountry').value.trim(),price:Number($('memPrice').value),description:$('memDescription').value.trim(),image_url,user_id:currentUser.id}}const {error}=await db.from(isT?'tickets':'memorabilia').insert(row);if(error)throw error;form.reset();say(msg,'Published successfully!');if(isT){await loadTickets();showPage('tickets')}else{await loadMemorabilia();showPage('memorabilia')}}catch(err){console.error(err);say(msg,`Could not publish: ${err.message}`,true)}finally{btn.disabled=false}}
+function openDetails(type,id){const item=(type==='ticket'?tickets:memorabilia).find(x=>String(x.id)===String(id));if(!item)return;selectedItem={type,item};const title=type==='ticket'?item.event_name:item.title;const content=$('detailContent');content.innerHTML=`<div class="detail-layout">${item.image_url?`<img class="detail-image" src="${safe(item.image_url)}" alt="${safe(title)}">`:`<div class="detail-art">${type==='ticket'?'90′':'MEMORABILIA'}</div>`}<div class="detail-info"><p class="eyebrow">${safe(type==='ticket'?category(item.category):(item.category||'Memorabilia'))} · LISTING</p><h2>${safe(title)}</h2>${type==='ticket'?`<p>📅 ${safe(dateText(item.event_date))}</p>`:''}<p>📍 ${safe(item.country||'Location not specified')}</p><hr><p>${safe(item.description||'No additional description provided.')}</p><h2>€${Number(item.price).toFixed(2)}</h2><button class="primary full" id="detailContact">Contact seller</button></div></div>`;modal('detailModal');attachSellerReviewPanel();$('detailContact').onclick=()=>{if(!currentUser){modal('detailModal',false);authMode='signin';updateAuth();modal('authModal');return}if(!item.user_id){toast('The seller account is unavailable for this older listing.');return}if(item.user_id===currentUser.id){toast('This is your own listing.');return}selectedSeller={id:item.user_id,type,item};$('contactTitle').textContent=`Message seller about ${title}`;modal('detailModal',false);modal('contactModal')}}
+async function beginContact(e){e.preventDefault();if(!currentUser)return say('contactMsg','Please sign in first.',true);if(!selectedSeller)return;const {id:sellerId,type,item}=selectedSeller;if(!item.user_id)return say('contactMsg','Seller account unavailable.',true);say('contactMsg','Sending…');try{let table=type==='ticket'?'conversations':'mem_conversations';let foreign=type==='ticket'?'ticket_id':'item_id';let {data:conv,error}=await db.from(table).select('*').contains('participant_ids',[currentUser.id,sellerId]).eq(foreign,item.id).limit(1).maybeSingle();if(error)throw error;if(!conv){const res=await db.from(table).insert({[foreign]:item.id,participant_ids:[currentUser.id,sellerId]}).select('*').single();if(res.error)throw res.error;conv=res.data}const msgTable=type==='ticket'?'messages':'mem_messages';const {error:me}=await db.from(msgTable).insert({conversation_id:conv.id,sender_id:currentUser.id,body:$('firstMessage').value.trim()});if(me)throw me;$('contactForm').reset();modal('contactModal',false);toast('Message sent. Open Messages to continue.')}catch(err){say('contactMsg',`Could not send message: ${err.message}`,true)}}
+async function openMessages(){if(!currentUser){authMode='signin';updateAuth();modal('authModal');return}modal('messagesModal');say('messagesMsg','Loading messages…');$('conversationList').innerHTML='';try{const all=[];for(const type of ['ticket','mem']){const table=type==='ticket'?'conversations':'mem_conversations';const {data,error}=await db.from(table).select('*').contains('participant_ids',[currentUser.id]).order('updated_at',{ascending:false});if(error){console.warn(error);continue}(data||[]).forEach(c=>all.push({...c,_type:type}))}if(!all.length)say('messagesMsg','No conversations yet. Open a listing and contact its seller.');else{say('messagesMsg','');$('conversationList').innerHTML=all.map(c=>`<button class="conversation-item" data-conv="${safe(c.id)}" data-type="${c._type}">Conversation · ${new Date(c.updated_at||c.created_at).toLocaleDateString()}</button>`).join('');$('conversationList').querySelectorAll('[data-conv]').forEach(b=>b.onclick=()=>loadChat(b.dataset.type,b.dataset.conv))}}catch(err){say('messagesMsg',err.message,true)}}
+async function loadChat(type,id){activeConversation={type,id};const table=type==='ticket'?'messages':'mem_messages';const {data,error}=await db.from(table).select('*').eq('conversation_id',id).order('created_at',{ascending:true});if(error)return say('messagesMsg',error.message,true);$('chat').hidden=false;$('chatBody').innerHTML=(data||[]).map(m=>`<div class="bubble ${m.sender_id===currentUser.id?'mine':''}">${safe(m.body)}<small>${new Date(m.created_at).toLocaleString()}</small></div>`).join('');$('chatBody').scrollTop=$('chatBody').scrollHeight}
+async function reply(e){e.preventDefault();if(!activeConversation||!currentUser)return;const body=$('replyText').value.trim();if(!body)return;const table=activeConversation.type==='ticket'?'messages':'mem_messages';const {error}=await db.from(table).insert({conversation_id:activeConversation.id,sender_id:currentUser.id,body});if(error)return say('messagesMsg',error.message,true);$('replyText').value='';await loadChat(activeConversation.type,activeConversation.id)}
+document.addEventListener('DOMContentLoaded',async()=>{document.querySelectorAll('[data-page]').forEach(b=>b.addEventListener('click',()=>showPage(b.dataset.page)));$('openAuth')?.addEventListener('click',()=>{updateAuth();modal('authModal')});$('signOut')?.addEventListener('click',signOut);$('authForm')?.addEventListener('submit',authSubmit);$('switchAuth')?.addEventListener('click',()=>{authMode=authMode==='signup'?'signin':'signup';say('authMsg','');updateAuth()});document.querySelectorAll('[data-close]').forEach(b=>b.addEventListener('click',()=>modal(b.dataset.close,false)));$('chooseTicket')?.addEventListener('click',()=>{ $('sellChoices').hidden=true; $('sellForms').hidden=false; $('ticketForm').hidden=false; $('memForm').hidden=true; });$('chooseMem')?.addEventListener('click',()=>{ $('sellChoices').hidden=true; $('sellForms').hidden=false; $('ticketForm').hidden=true; $('memForm').hidden=false; });$('backSell')?.addEventListener('click',()=>{ $('sellChoices').hidden=false; $('sellForms').hidden=true; });$('ticketForm')?.addEventListener('submit',e=>publish(e,'ticket'));$('memForm')?.addEventListener('submit',e=>publish(e,'mem'));$('contactForm')?.addEventListener('submit',beginContact);$('messagesOpen')?.addEventListener('click',openMessages);$('replyForm')?.addEventListener('submit',reply);$('ts')?.addEventListener('input',renderTickets);$('tf')?.addEventListener('change',renderTickets);$('ms')?.addEventListener('input',renderMemorabilia);$('mf')?.addEventListener('change',renderMemorabilia);document.addEventListener('click',e=>{const c=e.target.closest('[data-open-type]');if(c)openDetails(c.dataset.openType,c.dataset.openId)});document.addEventListener('keydown',e=>{if(e.key==='Escape')document.querySelectorAll('.modal').forEach(m=>m.hidden=true)});$('heroSearch')?.addEventListener('submit',e=>{e.preventDefault();$('ts').value=$('heroQuery').value;showPage('tickets')});$('lang')?.addEventListener('click',()=>{const next=document.documentElement.lang==='en'?'he':'en';document.documentElement.lang=next;document.documentElement.dir=next==='he'?'rtl':'ltr';document.querySelectorAll('[data-en][data-he]').forEach(el=>el.innerHTML=el.dataset[next]);document.querySelectorAll('[data-en-placeholder][data-he-placeholder]').forEach(el=>el.placeholder=el.dataset[next+'Placeholder']);$('lang').textContent=next==='he'?'English':'עברית'});
+try{if(!window.supabase?.createClient)throw Error('Supabase did not load. Check your internet connection and refresh.');db=window.supabase.createClient(SUPABASE_URL,SUPABASE_KEY,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true}});const {data,error}=await db.auth.getSession();if(error)throw error;currentUser=data.session?.user||null;updateAuth();db.auth.onAuthStateChange((_event,session)=>{currentUser=session?.user||null;updateAuth()});await loadTickets();await loadMemorabilia();}catch(err){console.error(err);say('ticketError',`Ticketly connection error: ${err.message}`,true);say('memError',`Ticketly connection error: ${err.message}`,true)} });
 
-const safe = value => String(value ?? "").replace(/[&<>"']/g, c => ({
-  "&":"&amp;",
-  "<":"&lt;",
-  ">":"&gt;",
-  '"':"&quot;",
-  "'":"&#39;"
-}[c]));
 
-function say(id, message, error = false) {
-  const el = $(id);
-  if (el) {
-    el.textContent = message;
-    el.classList.toggle("error-text", error);
-  }
+/* TICKETLY TEAM HUB + CLUB DIRECTORY + SELLER REVIEWS */
+const CLUB_LEAGUES=[
+  {api:'English_Premier_League',name:'English Premier League'},
+  {api:'Spanish_La_Liga',name:'La Liga'},
+  {api:'German_Bundesliga',name:'Bundesliga'},
+  {api:'Italian_Serie_A',name:'Serie A'},
+  {api:'French_Ligue_1',name:'Ligue 1'}
+];
+let clubDirectory=[],clubsLoaded=false,clubLoadPromise=null;
+function renderClubDirectory(){
+  const grid=$('clubGrid');if(!grid)return;
+  const q=($('clubSearch')?.value||'').trim().toLowerCase();
+  const league=$('leagueFilter')?.value||'All';
+  const rows=clubDirectory.filter(c=>(league==='All'||c.league===league)&&(`${c.name} ${c.league}`.toLowerCase().includes(q)));
+  grid.innerHTML=rows.length?rows.map(c=>`<button class="team-card" data-club-id="${safe(c.id)}"><img class="team-logo" src="${safe(c.logo||'')}" alt="${safe(c.name)} crest" onerror="this.style.display='none'"><span><strong>${safe(c.name)}</strong><small>${safe(c.league)}</small></span></button>`).join(''):'<p>No clubs match your search.</p>';
 }
-
-function toast(message) {
-  const el = $("toast");
-  if (!el) return;
-  el.textContent = message;
-  el.hidden = false;
-  setTimeout(() => el.hidden = true, 3500);
+async function loadClubDirectory(){
+  if(clubsLoaded){renderClubDirectory();return;}
+  if(clubLoadPromise){await clubLoadPromise;renderClubDirectory();return;}
+  clubLoadPromise=(async()=>{
+    say('clubStatus','Loading club names and crests...');
+    const results=await Promise.allSettled(CLUB_LEAGUES.map(async league=>{
+      const url=`https://www.thesportsdb.com/api/v1/json/123/search_all_teams.php?l=${encodeURIComponent(league.api)}`;
+      const response=await fetch(url);if(!response.ok)throw Error(`${league.name}: HTTP ${response.status}`);
+      const json=await response.json();
+      return (json.teams||[]).map(t=>({id:t.idTeam,name:t.strTeam,logo:t.strBadge||t.strLogo||'',league:league.name,stadium:t.strStadium||'',description:t.strDescriptionEN||''}));
+    }));
+    clubDirectory=results.flatMap(r=>r.status==='fulfilled'?r.value:[]).filter(c=>c.id&&c.name);
+    const unique=new Map();clubDirectory.forEach(c=>unique.set(c.id,c));clubDirectory=[...unique.values()].sort((a,b)=>a.name.localeCompare(b.name));
+    clubsLoaded=true;
+    const failed=results.filter(r=>r.status==='rejected').length;
+    say('clubStatus',clubDirectory.length?`${clubDirectory.length} clubs loaded${failed?` · ${failed} league source(s) unavailable`:''}.`:'Club directory could not load. Please refresh and try again.',!clubDirectory.length);
+    renderClubDirectory();
+  })();
+  try{await clubLoadPromise;}finally{clubLoadPromise=null;}
 }
-
-function modal(id, show = true) {
-  if ($(id)) $(id).hidden = !show;
-  document.body.classList.toggle("modal-open", show);
-}
-
-function category(value) {
-  const s = String(value || "").toLowerCase();
-  if (s.includes("football") || s.includes("soccer")) return "Football";
-  if (s.includes("basket")) return "Basketball";
-  if (s.includes("tennis")) return "Tennis";
-  return "Other";
-}
-
-function dateText(value) {
-  if (!value) return "Date not specified";
-  const d = new Date(value + "T12:00:00");
-  return isNaN(d) ? safe(value) :
-    d.toLocaleDateString(undefined, {
-      day:"numeric",
-      month:"short",
-      year:"numeric"
-    });
-}
-
-function showPage(id) {
-  ["home","tickets","teamHub","memorabilia","reviews","sell","alerts"].forEach(page => {
-    if ($(page)) $(page).hidden = page !== id;
-  });
-
-  if ($("ticker")) $("ticker").hidden = id !== "home";
-
-  document.querySelectorAll("[data-page]").forEach(button => {
-    button.classList.toggle("active", button.dataset.page === id);
-  });
-
-  if (id === "tickets") renderTickets();
-  if (id === "memorabilia") renderMemorabilia();
-  if (id === "teamHub" && $("teamGrid")) loadTeams();
-  if (id === "reviews" && $("reviewsList")) loadReviews();
-
-  window.scrollTo({top:0,behavior:"smooth"});
-}
-
-function updateAuth() {
-  const signed = !!currentUser;
-
-  if ($("openAuth")) {
-    $("openAuth").textContent = signed
-      ? (currentUser.email || "Profile")
-      : "Profile / Sign in";
-  }
-
-  if ($("signOut")) $("signOut").hidden = !signed;
-
-  if ($("authTitle")) {
-    $("authTitle").textContent =
-      authMode === "signup" ? "Create account" : "Sign in";
-  }
-
-  if ($("authSubmit")) {
-    $("authSubmit").textContent =
-      authMode === "signup" ? "Create account" : "Sign in";
-    $("authSubmit").hidden = signed;
-  }
-
-  if ($("email")) $("email").disabled = signed;
-  if ($("password")) $("password").disabled = signed;
-  if ($("switchAuth")) $("switchAuth").hidden = signed;
-
-  if (signed && $("authMsg")) {
-    $("authMsg").textContent = "Signed in as " + currentUser.email;
-  }
-}
-
-function requireDatabase() {
-  if (!db) {
-    throw new Error("Ticketly is still connecting. Please refresh the page and try again.");
-  }
-}
-
-async function authSubmit(event) {
-  event.preventDefault();
-
-  if (!db) {
-    say("authMsg", "Ticketly is still connecting. Please try again shortly.", true);
-    return;
-  }
-
-  const email = $("email").value.trim();
-  const password = $("password").value;
-
-  $("authSubmit").disabled = true;
-  say("authMsg", "Please wait...");
-
-  try {
-    if (authMode === "signup") {
-      const {data,error} = await db.auth.signUp({email,password});
-      if (error) throw error;
-
-      if (data.session) {
-        currentUser = data.user;
-        updateAuth();
-        say("authMsg", "Account created and signed in.");
-      } else {
-        say("authMsg", "Account created. Check your email if confirmation is required.");
-      }
-    } else {
-      const {data,error} = await db.auth.signInWithPassword({email,password});
-      if (error) throw error;
-
-      currentUser = data.user;
-      updateAuth();
-      modal("authModal", false);
-      toast("Signed in successfully.");
-    }
-  } catch (error) {
-    say("authMsg", error.message, true);
-  } finally {
-    $("authSubmit").disabled = false;
-  }
-}
-
-async function signOut() {
-  try {
-    requireDatabase();
-    const {error} = await db.auth.signOut();
-    if (error) throw error;
-
-    currentUser = null;
-    updateAuth();
-    toast("Signed out.");
-  } catch (error) {
-    toast(error.message);
-  }
-}
-
-function card(item,type) {
-  const title = type === "ticket" ? item.event_name : item.title;
-
-  const image = item.image_url
-    ? `<img src="${safe(item.image_url)}" alt="${safe(title)}">`
-    : `<div class="card-placeholder">${type === "ticket" ? "⚽" : "★"}</div>`;
-
-  return `<article class="listing-card ticket-card" tabindex="0" role="button"
-    data-open-type="${type}" data-open-id="${safe(item.id)}">
-    ${image}
-    <div class="ticket-card-inner">
-      <div class="ticket-card-top">
-        <span class="ticket-category">${safe(type === "ticket" ? category(item.category) : item.category)}</span>
-        <span class="ticket-date">${type === "ticket" ? dateText(item.event_date) : "Collectible"}</span>
-      </div>
-      <h3>${safe(title || "Untitled listing")}</h3>
-      <p class="ticket-country">📍 ${safe(item.country || "Location not specified")}</p>
-      <div class="ticket-card-bottom">
-        <strong>€${Number(item.price).toFixed(2)}</strong>
-        <span class="ticket-label">View details →</span>
-      </div>
-    </div>
-  </article>`;
-}
-
-function renderTickets() {
-  if (!$("ticketGrid")) return;
-
-  const q = ($("ts")?.value || "").toLowerCase();
-  const filter = $("tf")?.value || "All";
-
-  const rows = tickets.filter(t =>
-    (filter === "All" || category(t.category) === filter) &&
-    `${t.event_name} ${t.country} ${t.description || ""}`.toLowerCase().includes(q)
-  );
-
-  $("ticketGrid").innerHTML = rows.length
-    ? rows.map(t => card(t,"ticket")).join("")
-    : "<p>No sports tickets found. Try another search.</p>";
-}
-
-function renderMemorabilia() {
-  if (!$("memGrid")) return;
-
-  const q = ($("ms")?.value || "").toLowerCase();
-  const filter = $("mf")?.value || "All";
-
-  const rows = memorabilia.filter(m =>
-    (filter === "All" || m.category === filter) &&
-    `${m.title} ${m.country} ${m.description || ""} ${m.category || ""}`.toLowerCase().includes(q)
-  );
-
-  $("memGrid").innerHTML = rows.length
-    ? rows.map(m => card(m,"mem")).join("")
-    : "<p>No memorabilia listings found.</p>";
-}
-
-async function loadTickets() {
-  requireDatabase();
-
-  const {data,error} = await db.from("tickets")
-    .select("*")
-    .order("created_at",{ascending:false});
-
-  if (error) throw error;
-
-  tickets = (data || []).filter(t =>
-    ["Football","Basketball","Tennis","Other"].includes(category(t.category))
-  );
-
-  renderTickets();
-}
-
-async function loadMemorabilia() {
-  requireDatabase();
-
-  const {data,error} = await db.from("memorabilia")
-    .select("*")
-    .order("created_at",{ascending:false});
-
-  if (error) {
-    memorabilia = [];
-    say("memError","Could not load memorabilia: " + error.message,true);
-    renderMemorabilia();
-    return;
-  }
-
-  memorabilia = data || [];
-  renderMemorabilia();
-}
-
-async function uploadPhoto(input) {
-  const file = input?.files?.[0];
-  if (!file) return null;
-
-  if (!file.type.startsWith("image/")) {
-    throw Error("Choose an image file.");
-  }
-
-  if (file.size > 5 * 1024 * 1024) {
-    throw Error("Images must be 5 MB or smaller.");
-  }
-
-  if (!currentUser) {
-    throw Error("Please sign in before uploading a photo.");
-  }
-
-  const ext = (file.name.split(".").pop() || "jpg")
-    .replace(/[^a-z0-9]/gi,"")
-    .toLowerCase();
-
-  const path = `${currentUser.id}/${Date.now()}.${ext}`;
-
-  const {error} = await db.storage.from("ticket-photos").upload(path,file,{
-    upsert:false,
-    contentType:file.type
-  });
-
-  if (error) throw error;
-
-  return db.storage.from("ticket-photos").getPublicUrl(path).data.publicUrl;
-}
-
-async function publish(event,type) {
-  event.preventDefault();
-
-  if (!currentUser) {
-    authMode = "signin";
-    updateAuth();
-    modal("authModal");
-    return;
-  }
-
-  const isTicket = type === "ticket";
-  const form = $(isTicket ? "ticketForm" : "memForm");
-  const message = isTicket ? "ticketMsg" : "memMsg";
-  const button = $(isTicket ? "ticketSubmit" : "memSubmit");
-
-  button.disabled = true;
-  say(message,"Publishing...");
-
-  try {
-    const image_url = await uploadPhoto(
-      $(isTicket ? "ticketPhoto" : "memPhoto")
-    );
-
-    let row;
-
-    if (isTicket) {
-      row = {
-        event_name:$("eventName").value.trim(),
-        category:$("eventCategory").value,
-        country:$("eventCountry").value.trim(),
-        event_date:$("eventDate").value,
-        price:Number($("ticketPrice").value),
-        description:$("ticketDescription").value.trim(),
-        user_id:currentUser.id
-      };
-    } else {
-      row = {
-        title:$("memTitle").value.trim(),
-        category:$("memCategory").value,
-        country:$("memCountry").value.trim(),
-        price:Number($("memPrice").value),
-        description:$("memDescription").value.trim(),
-        user_id:currentUser.id
-      };
-    }
-
-    if (image_url) row.image_url = image_url;
-
-    const {error} = await db.from(
-      isTicket ? "tickets" : "memorabilia"
-    ).insert(row);
-
-    if (error) throw error;
-
-    form.reset();
-    say(message,"Published successfully!");
-
-    if (isTicket) {
-      await loadTickets();
-      showPage("tickets");
-    } else {
-      await loadMemorabilia();
-      showPage("memorabilia");
-    }
-  } catch (error) {
-    say(message,"Could not publish: " + error.message,true);
-  } finally {
-    button.disabled = false;
-  }
-}
-
-async function openDetails(type,id) {
-  const item = (type === "ticket" ? tickets : memorabilia)
-    .find(x => String(x.id) === String(id));
-
-  if (!item) return toast("This listing is no longer available.");
-
-  const title = type === "ticket" ? item.event_name : item.title;
-
-  $("detailContent").innerHTML = `
-    <div class="detail-layout">
-      <div>${item.image_url
-        ? `<img class="detail-image" src="${safe(item.image_url)}" alt="${safe(title)}">`
-        : `<div class="detail-art">${type === "ticket" ? "⚽" : "★"}</div>`}
-      </div>
-      <div class="detail-info">
-        <p class="eyebrow">${safe(type === "ticket" ? category(item.category) : item.category)} · LISTING</p>
-        <h2>${safe(title)}</h2>
-        ${type === "ticket" ? `<p>📅 ${dateText(item.event_date)}</p>` : ""}
-        <p>📍 ${safe(item.country || "Location not specified")}</p>
-        <p>${safe(item.description || "No additional description provided.")}</p>
-        <h2>€${Number(item.price).toFixed(2)}</h2>
-        <div id="sellerProfileArea"></div>
-        <button class="primary full" id="detailContact">Contact seller</button>
-      </div>
-    </div>`;
-
-  modal("detailModal");
-
-  if (item.user_id) showSellerProfile(item.user_id,type);
-
-  $("detailContact").onclick = () => {
-    if (!currentUser) {
-      modal("detailModal",false);
-      authMode = "signin";
-      updateAuth();
-      modal("authModal");
-      return;
-    }
-
-    if (!item.user_id) return toast("Seller account unavailable.");
-    if (item.user_id === currentUser.id) return toast("This is your own listing.");
-
-    selectedSeller = {id:item.user_id,type,item};
-    $("contactTitle").textContent = "Message seller about " + title;
-    modal("detailModal",false);
-    modal("contactModal");
+async function openClub(id){
+  const c=clubDirectory.find(x=>String(x.id)===String(id));if(!c)return;
+  const box=$('clubDetail');
+  box.innerHTML=`<div class="team-detail"><div class="team-detail-head"><img src="${safe(c.logo)}" alt="${safe(c.name)} crest"><div><h2>${safe(c.name)}</h2><p>${safe(c.league)}</p></div></div>${c.stadium?`<p><b>Stadium:</b> ${safe(c.stadium)}</p>`:''}<button class="primary" id="followClub">Follow this club</button><h3>Fan posts</h3><form id="clubPostForm"><textarea id="clubPostText" maxlength="1000" placeholder="Write a message for other ${safe(c.name)} fans..." required></textarea><button class="primary">Post</button></form><div id="clubPosts">Loading posts...</div></div>`;
+  box.scrollIntoView({behavior:'smooth',block:'start'});
+  await loadClubPosts(c.id);
+  const {data:sessionData}=await db.auth.getSession();
+  const user=sessionData.session?.user||currentUser;
+  $('followClub').onclick=async()=>{
+    if(!user){authMode='signin';updateAuth();modal('authModal');return;}
+    const {data,error}=await db.from('team_follows').select('id').eq('team_id',String(c.id)).eq('user_id',user.id).maybeSingle();
+    if(error)return toast('Follow error: '+error.message);
+    if(data){const r=await db.from('team_follows').delete().eq('id',data.id);if(r.error)return toast(r.error.message);toast('Unfollowed '+c.name);}
+    else{const r=await db.from('team_follows').insert({team_id:String(c.id),team_name:c.name,league:c.league,logo_url:c.logo,user_id:user.id});if(r.error)return toast(r.error.message);toast('Following '+c.name+'!');}
   };
+  $('clubPostForm').onsubmit=async e=>{e.preventDefault();if(!user){authMode='signin';updateAuth();modal('authModal');return;}const body=$('clubPostText').value.trim();const {error}=await db.from('team_posts').insert({team_id:String(c.id),team_name:c.name,user_id:user.id,body});if(error)return toast('Could not post: '+error.message);$('clubPostText').value='';await loadClubPosts(c.id);};
 }
-
-async function showSellerProfile(sellerId,kind) {
-  const table = kind === "mem" ? "memorabilia" : "tickets";
-
-  const [listings,sales,reviews] = await Promise.all([
-    db.from(table).select("id",{count:"exact",head:true}).eq("user_id",sellerId),
-    db.from("ticket_sales").select("id",{count:"exact",head:true})
-      .eq("seller_id",sellerId).eq("status","completed"),
-    db.from("seller_reviews").select("rating,review,created_at")
-      .eq("seller_id",sellerId).order("created_at",{ascending:false})
-  ]);
-
-  const area = $("sellerProfileArea");
-  if (!area) return;
-
-  const rows = reviews.data || [];
-  const average = rows.length
-    ? rows.reduce((sum,r) => sum + Number(r.rating),0) / rows.length
-    : 0;
-
-  area.innerHTML = `
-    <div class="seller-panel">
-      <h3>Seller profile</h3>
-      <p><b>Active listings:</b> ${listings.count ?? "—"}</p>
-      <p><b>Completed ticket sales:</b> ${sales.count ?? 0}</p>
-      <p><b>Rating:</b> ${rows.length ? average.toFixed(1)+"/5 ("+rows.length+" reviews)" : "No reviews yet"}</p>
-      <button class="hub-button" id="writeReview">Write a review</button>
-      <div id="sellerReviewForm" hidden>
-        <form id="sellerReviewSubmit">
-          <label>Rating
-            <select id="sellerRating" required>
-              <option value="">Choose rating</option>
-              <option value="5">5 stars</option>
-              <option value="4">4 stars</option>
-              <option value="3">3 stars</option>
-              <option value="2">2 stars</option>
-              <option value="1">1 star</option>
-            </select>
-          </label>
-          <textarea id="sellerReviewText" maxlength="1000" placeholder="Your experience"></textarea>
-          <button class="primary">Submit review</button>
-        </form>
-      </div>
-    </div>`;
-
-  $("writeReview").onclick = () => {
-    if (!currentUser) {
-      modal("authModal");
-      return;
-    }
-
-    if (currentUser.id === sellerId) {
-      return toast("You cannot review yourself.");
-    }
-
-    $("sellerReviewForm").hidden = false;
-  };
-
-  $("sellerReviewSubmit").onsubmit = async event => {
-    event.preventDefault();
-
-    const {error} = await db.from("seller_reviews").insert({
-      seller_id:sellerId,
-      reviewer_id:currentUser.id,
-      rating:Number($("sellerRating").value),
-      review:$("sellerReviewText").value.trim()
-    });
-
-    if (error) return toast(error.message);
-
-    toast("Review submitted.");
-    showSellerProfile(sellerId,kind);
-  };
+async function loadClubPosts(id){const target=$('clubPosts');if(!target)return;const {data,error}=await db.from('team_posts').select('body,created_at,team_name').eq('team_id',String(id)).order('created_at',{ascending:false}).limit(30);target.innerHTML=error?`<p class="error">Posts unavailable: ${safe(error.message)}</p>`:(data||[]).length?data.map(p=>`<article class="review-card"><p>${safe(p.body)}</p><small>${safe(p.team_name||'Fan')} · ${new Date(p.created_at).toLocaleString()}</small></article>`).join(''):'<p>No posts yet. Be the first fan to post.</p>';}
+async function loadCommunityReviews(){
+  const target=$('reviewsList');if(!target)return;target.innerHTML='<p>Loading reviews...</p>';
+  const {data,error}=await db.from('seller_reviews').select('rating,review,created_at,seller_id,reviewer_id').order('created_at',{ascending:false}).limit(100);
+  if(error){target.innerHTML=`<p class="error">Reviews could not load: ${safe(error.message)}. Run setup.sql in Supabase first.</p>`;return;}
+  target.innerHTML=(data||[]).length?data.map(r=>`<article class="review-card"><div class="review-stars">${'★'.repeat(Number(r.rating))}${'☆'.repeat(5-Number(r.rating))}</div><p>${safe(r.review||'No written comment.')}</p><small>${new Date(r.created_at).toLocaleDateString()} · Seller ID ${safe(String(r.seller_id).slice(0,8))}</small></article>`).join(''):'<p>No seller reviews yet. Open a listing and use its seller review section to leave the first review.</p>';
 }
-
-async function beginContact(event) {
-  event.preventDefault();
-
-  if (!currentUser || !selectedSeller) return;
-
-  const {id:sellerId,item} = selectedSeller;
-  say("contactMsg","Sending...");
-
-  try {
-    const {data:conversation,error} = await db.from("conversations")
-      .select("*")
-      .contains("participant_ids",[currentUser.id,sellerId])
-      .eq("ticket_id",item.id)
-      .limit(1)
-      .maybeSingle();
-
-    if (error) throw error;
-
-    let conv = conversation;
-
-    if (!conv) {
-      const result = await db.from("conversations").insert({
-        ticket_id:item.id,
-        participant_ids:[currentUser.id,sellerId]
-      }).select("*").single();
-
-      if (result.error) throw result.error;
-      conv = result.data;
-    }
-
-    const {error:messageError} = await db.from("messages").insert({
-      conversation_id:conv.id,
-      sender_id:currentUser.id,
-      body:$("firstMessage").value.trim()
-    });
-
-    if (messageError) throw messageError;
-
-    $("contactForm").reset();
-    modal("contactModal",false);
-    toast("Message sent.");
-  } catch (error) {
-    say("contactMsg","Could not send: " + error.message,true);
-  }
+async function attachSellerReviewPanel(){
+  const item=selectedItem?.item;if(!item?.user_id)return;
+  const content=$('detailContent');if(!content||content.querySelector('#sellerReviewPanel'))return;
+  const panel=document.createElement('section');panel.id='sellerReviewPanel';panel.className='seller-review-panel';panel.innerHTML='<h3>Seller profile & reviews</h3><p>Loading seller feedback...</p>';
+  content.append(panel);
+  const {data:reviews,error}=await db.from('seller_reviews').select('rating,review,created_at').eq('seller_id',item.user_id).order('created_at',{ascending:false}).limit(20);
+  if(error){panel.innerHTML=`<h3>Seller reviews</h3><p class="error">${safe(error.message)}. Run setup.sql in Supabase to enable reviews.</p>`;return;}
+  const rows=reviews||[];const average=rows.length?rows.reduce((n,r)=>n+Number(r.rating),0)/rows.length:0;
+  panel.innerHTML=`<h3>Seller profile & reviews</h3><p><b>Rating:</b> ${rows.length?`${average.toFixed(1)} / 5 (${rows.length} reviews)`:'No reviews yet'}</p><div>${rows.map(r=>`<div class="review-card"><div class="review-stars">${'★'.repeat(Number(r.rating))}${'☆'.repeat(5-Number(r.rating))}</div><p>${safe(r.review||'')}</p><small>${new Date(r.created_at).toLocaleDateString()}</small></div>`).join('')}</div><div id="sellerReviewAction"></div>`;
+  const action=$('sellerReviewAction');
+  if(!currentUser){action.innerHTML='<p>Sign in to review this seller.</p><button class="primary" id="reviewSignIn">Sign in</button>'; $('reviewSignIn').onclick=()=>modal('authModal');return;}
+  if(currentUser.id===item.user_id){action.innerHTML='<p>You cannot review your own listing.</p>';return;}
+  action.innerHTML=`<form class="review-form" id="sellerReviewForm"><h4>Leave a seller review</h4><label>Rating</label><select id="sellerRating" required><option value="">Choose stars</option><option value="5">5 stars</option><option value="4">4 stars</option><option value="3">3 stars</option><option value="2">2 stars</option><option value="1">1 star</option></select><textarea id="sellerReviewText" maxlength="1000" placeholder="Describe your experience with this seller" required></textarea><button class="primary">Submit review</button><p id="sellerReviewMessage"></p></form>`;
+  $('sellerReviewForm').onsubmit=async e=>{e.preventDefault();const rating=Number($('sellerRating').value),review=$('sellerReviewText').value.trim();const {error}=await db.from('seller_reviews').insert({seller_id:item.user_id,reviewer_id:currentUser.id,rating,review});if(error){say('sellerReviewMessage',error.message,true);return;}toast('Thank you. Your review was submitted.');panel.remove();await attachSellerReviewPanel();};
 }
-
-async function openMessages() {
-  if (!currentUser) {
-    modal("authModal");
-    return;
-  }
-
-  modal("messagesModal");
-  $("conversationList").innerHTML = "Loading...";
-  $("chat").hidden = true;
-
-  const {data,error} = await db.from("conversations")
-    .select("*")
-    .contains("participant_ids",[currentUser.id])
-    .order("updated_at",{ascending:false});
-
-  if (error) return say("messagesMsg",error.message,true);
-
-  const rows = data || [];
-
-  $("conversationList").innerHTML = rows.length
-    ? rows.map(c =>
-      `<button class="conversation-item" data-conv="${safe(c.id)}">
-        Conversation · ${new Date(c.updated_at || c.created_at).toLocaleDateString()}
-      </button>`
-    ).join("")
-    : "No conversations yet.";
-
-  $("conversationList").querySelectorAll("[data-conv]").forEach(button => {
-    button.onclick = () => loadChat(button.dataset.conv);
-  });
-}
-
-async function loadChat(id) {
-  activeConversation = id;
-
-  const {data,error} = await db.from("messages")
-    .select("*")
-    .eq("conversation_id",id)
-    .order("created_at",{ascending:true});
-
-  if (error) return say("messagesMsg",error.message,true);
-
-  $("chat").hidden = false;
-
-  $("chatBody").innerHTML = (data || []).map(m =>
-    `<div class="bubble ${m.sender_id === currentUser.id ? "mine" : ""}">
-      ${safe(m.body)}
-      <small>${new Date(m.created_at).toLocaleString()}</small>
-    </div>`
-  ).join("");
-
-  $("chatBody").scrollTop = $("chatBody").scrollHeight;
-}
-
-async function reply(event) {
-  event.preventDefault();
-
-  if (!activeConversation || !currentUser) return;
-
-  const body = $("replyText").value.trim();
-  if (!body) return;
-
-  const {error} = await db.from("messages").insert({
-    conversation_id:activeConversation,
-    sender_id:currentUser.id,
-    body
-  });
-
-  if (error) return say("messagesMsg",error.message,true);
-
-  $("replyText").value = "";
-  await loadChat(activeConversation);
-}
-
-/* TEAM HUB */
-
-async function loadTeams() {
-  if (!$("teamGrid")) return;
-
-  $("teamGrid").innerHTML = "<p>Loading clubs...</p>";
-
-  const {data,error} = await db.from("teams")
-    .select("*")
-    .order("name");
-
-  if (error) {
-    $("teamGrid").innerHTML =
-      `<p class="error">Could not load teams: ${safe(error.message)}</p>`;
-    return;
-  }
-
-  teams = data || [];
-  renderTeams();
-}
-
-function renderTeams() {
-  if (!$("teamGrid")) return;
-
-  const query = (($("teamSearch")?.value) || "").toLowerCase();
-
-  const rows = teams.filter(t =>
-    t.sport === activeSport &&
-    `${t.name} ${t.league || ""}`.toLowerCase().includes(query)
-  );
-
-  $("teamGrid").innerHTML = rows.length
-    ? rows.map(t => `
-      <button class="team-button" data-team-id="${safe(t.id)}">
-        ${t.logo_url
-          ? `<img src="${safe(t.logo_url)}" alt="">`
-          : `<b>${activeSport === "Football" ? "⚽" : "🏀"}</b>`}
-        <span>
-          <b>${safe(t.name)}</b>
-          <small>${safe(t.league || activeSport)}</small>
-        </span>
-      </button>
-    `).join("")
-    : `<p>No ${activeSport.toLowerCase()} clubs added yet. The clubs need to be entered in your Supabase teams table.</p>`;
-}
-
-async function openTeam(id) {
-  const team = teams.find(t => String(t.id) === String(id));
-  if (!team) return;
-
-  const box = $("teamDetail");
-  if (!box) return;
-
-  box.innerHTML = `
-    <div class="hub-panel">
-      <div class="team-heading">
-        ${team.logo_url ? `<img src="${safe(team.logo_url)}" width="65" alt="">` : ""}
-        <h2>${safe(team.name)}</h2>
-        <p class="muted">${safe(team.league || "")}</p>
-      </div>
-      <button class="hub-button primary-hub" id="followTeam">Follow team</button>
-      <h3>Fan posts</h3>
-      <form id="teamPostForm">
-        <textarea id="teamPostText" maxlength="1500" required
-          placeholder="Share an update about ${safe(team.name)}..."></textarea>
-        <button class="primary">Publish post</button>
-      </form>
-      <div id="teamPosts">Loading posts...</div>
-    </div>`;
-
-  const {data:followRows} = await db.from("team_follows")
-    .select("user_id")
-    .eq("team_id",team.id);
-
-  let following = (followRows || []).some(x => x.user_id === currentUser?.id);
-
-  $("followTeam").textContent = following ? "Following ✓" : "Follow team";
-
-  $("followTeam").onclick = async () => {
-    if (!currentUser) return modal("authModal");
-
-    const result = following
-      ? await db.from("team_follows").delete()
-          .eq("team_id",team.id)
-          .eq("user_id",currentUser.id)
-      : await db.from("team_follows").insert({
-          team_id:team.id,
-          user_id:currentUser.id
-        });
-
-    if (result.error) return toast(result.error.message);
-
-    following = !following;
-    $("followTeam").textContent = following ? "Following ✓" : "Follow team";
-  };
-
-  $("teamPostForm").onsubmit = async event => {
-    event.preventDefault();
-
-    if (!currentUser) return modal("authModal");
-
-    const {error} = await db.from("team_posts").insert({
-      team_id:team.id,
-      user_id:currentUser.id,
-      body:$("teamPostText").value.trim()
-    });
-
-    if (error) return toast(error.message);
-
-    $("teamPostText").value = "";
-    await loadTeamPosts(team.id);
-  };
-
-  await loadTeamPosts(team.id);
-}
-
-async function loadTeamPosts(id) {
-  const {data,error} = await db.from("team_posts")
-    .select("*")
-    .eq("team_id",id)
-    .order("created_at",{ascending:false})
-    .limit(50);
-
-  if (!$("teamPosts")) return;
-
-  $("teamPosts").innerHTML = error
-    ? safe(error.message)
-    : (data || []).length
-      ? data.map(post => `
-        <article class="hub-post">
-          <p>${safe(post.body)}</p>
-          <small class="muted">${new Date(post.created_at).toLocaleString()}</small>
-        </article>
-      `).join("")
-      : "<p>No posts yet. Start the conversation!</p>";
-}
-
-async function loadReviews() {
-  if (!$("reviewsList")) return;
-
-  $("reviewsList").innerHTML = "Loading reviews...";
-
-  const {data,error} = await db.from("seller_reviews")
-    .select("*")
-    .order("created_at",{ascending:false})
-    .limit(100);
-
-  if (error) {
-    $("reviewsList").innerHTML = `<p class="error">${safe(error.message)}</p>`;
-    return;
-  }
-
-  $("reviewsList").innerHTML = (data || []).length
-    ? data.map(r => `
-      <article class="review-card">
-        <b class="green">${"★".repeat(Number(r.rating))}${"☆".repeat(5-Number(r.rating))}</b>
-        <p>${safe(r.review || "No written comment.")}</p>
-        <small class="muted">${new Date(r.created_at).toLocaleDateString()}</small>
-      </article>
-    `).join("")
-    : "<p>No reviews have been submitted yet.</p>";
-}
-
-/* LANGUAGE */
-
-function setLanguage(language) {
-  const selected = language === "he" ? "he" : "en";
-
-  document.documentElement.lang = selected;
-  document.documentElement.dir = selected === "he" ? "rtl" : "ltr";
-
-  document.querySelectorAll("[data-en][data-he]").forEach(el => {
-    el.innerHTML = el.dataset[selected];
-  });
-
-  document.querySelectorAll(
-    "[data-en-placeholder][data-he-placeholder]"
-  ).forEach(el => {
-    el.placeholder = el.dataset[selected + "Placeholder"] || "";
-  });
-
-  if ($("lang")) {
-    $("lang").textContent = selected === "he" ? "English" : "עברית";
-  }
-
-  try {
-    localStorage.setItem("ticketlyLanguage",selected);
-  } catch (_) {}
-}
-
-/* STARTUP */
-
-document.addEventListener("DOMContentLoaded", async () => {
-
-  document.querySelectorAll("[data-page]").forEach(button => {
-    button.addEventListener("click",() => showPage(button.dataset.page));
-  });
-
-  $("openAuth")?.addEventListener("click",() => {
-    updateAuth();
-    modal("authModal");
-  });
-
-  $("signOut")?.addEventListener("click",signOut);
-  $("authForm")?.addEventListener("submit",authSubmit);
-
-  $("switchAuth")?.addEventListener("click",() => {
-    authMode = authMode === "signup" ? "signin" : "signup";
-    say("authMsg","");
-    updateAuth();
-  });
-
-  document.querySelectorAll("[data-close]").forEach(button => {
-    button.addEventListener("click",() => modal(button.dataset.close,false));
-  });
-
-  $("chooseTicket")?.addEventListener("click",() => {
-    $("sellChoices").hidden = true;
-    $("sellForms").hidden = false;
-    $("ticketForm").hidden = false;
-    $("memForm").hidden = true;
-  });
-
-  $("chooseMem")?.addEventListener("click",() => {
-    $("sellChoices").hidden = true;
-    $("sellForms").hidden = false;
-    $("ticketForm").hidden = true;
-    $("memForm").hidden = false;
-  });
-
-  $("backSell")?.addEventListener("click",() => {
-    $("sellChoices").hidden = false;
-    $("sellForms").hidden = true;
-  });
-
-  $("ticketForm")?.addEventListener("submit",e => publish(e,"ticket"));
-  $("memForm")?.addEventListener("submit",e => publish(e,"mem"));
-  $("contactForm")?.addEventListener("submit",beginContact);
-  $("messagesOpen")?.addEventListener("click",openMessages);
-  $("replyForm")?.addEventListener("submit",reply);
-
-  $("ts")?.addEventListener("input",renderTickets);
-  $("tf")?.addEventListener("change",renderTickets);
-  $("ms")?.addEventListener("input",renderMemorabilia);
-  $("mf")?.addEventListener("change",renderMemorabilia);
-  $("teamSearch")?.addEventListener("input",renderTeams);
-
-  document.querySelectorAll("[data-sport]").forEach(button => {
-    button.addEventListener("click",() => {
-      activeSport = button.dataset.sport;
-
-      document.querySelectorAll("[data-sport]").forEach(b => {
-        b.classList.toggle("active",b === button);
-      });
-
-      if ($("teamDetail")) $("teamDetail").innerHTML = "";
-      renderTeams();
-    });
-  });
-
-  $("teamGrid")?.addEventListener("click",event => {
-    const button = event.target.closest("[data-team-id]");
-    if (button) openTeam(button.dataset.teamId);
-  });
-
-  document.addEventListener("click",event => {
-    const item = event.target.closest("[data-open-type]");
-    if (item) openDetails(item.dataset.openType,item.dataset.openId);
-  });
-
-  document.addEventListener("keydown",event => {
-    if (event.key === "Escape") {
-      document.querySelectorAll(".modal").forEach(m => m.hidden = true);
-      document.body.classList.remove("modal-open");
-    }
-  });
-
-  $("heroSearch")?.addEventListener("submit",event => {
-    event.preventDefault();
-    $("ts").value = $("heroQuery").value;
-    showPage("tickets");
-  });
-
-  $("lang")?.addEventListener("click",() => {
-    setLanguage(document.documentElement.lang === "he" ? "en" : "he");
-  });
-
-  let savedLanguage = "en";
-  try {
-    savedLanguage = localStorage.getItem("ticketlyLanguage") || "en";
-  } catch (_) {}
-
-  setLanguage(savedLanguage);
-
-  try {
-    const supabaseLibrary = await (
-      window.ticketlySupabaseReady || Promise.resolve(window.supabase)
-    );
-
-    if (!supabaseLibrary?.createClient) {
-      throw new Error(
-        "Supabase could not load. Check your internet connection and refresh the page."
-      );
-    }
-
-    db = supabaseLibrary.createClient(SUPABASE_URL,SUPABASE_KEY,{
-      auth: {
-        persistSession:true,
-        autoRefreshToken:true,
-        detectSessionInUrl:true
-      }
-    });
-
-    const {data,error} = await db.auth.getSession();
-    if (error) throw error;
-
-    currentUser = data.session?.user || null;
-    updateAuth();
-
-    db.auth.onAuthStateChange((_event,session) => {
-      currentUser = session?.user || null;
-      updateAuth();
-    });
-
-    await loadTickets();
-    await loadMemorabilia();
-
-  } catch (error) {
-    console.error("Ticketly startup error:",error);
-    say("ticketError","Ticketly connection error: " + error.message,true);
-    say("memError","Ticketly connection error: " + error.message,true);
-    say("authMsg","Connection error: " + error.message,true);
-  }
+const detailObserver=new MutationObserver(()=>{if($('detailModal')&&!$('detailModal').hidden&&selectedItem?.item?.user_id)attachSellerReviewPanel();});
+document.addEventListener('DOMContentLoaded',()=>{
+  $('clubSearch')?.addEventListener('input',renderClubDirectory);
+  $('leagueFilter')?.addEventListener('change',renderClubDirectory);
+  $('clubGrid')?.addEventListener('click',e=>{const b=e.target.closest('[data-club-id]');if(b)openClub(b.dataset.clubId);});
+  if($('detailContent'))detailObserver.observe($('detailContent'),{childList:true,subtree:true});
 });
