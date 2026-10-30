@@ -1,1090 +1,620 @@
-
 "use strict";
 
 const SUPABASE_URL = "https://lhmatsjxdkgoqubuezfi.supabase.co";
 const SUPABASE_KEY = "sb_publishable_jENZfb_D2Tws5sk3bkSkQA_BDvzdknA";
 
-let db = null;
-let currentUser = null;
-let authMode = "signin";
-let allTickets = [];
-let allMemorabilia = [];
-let activeItem = null;
-let activeConversation = null;
-let language = "en";
+let db, currentUser = null, authMode = "signin";
+let tickets = [], memorabilia = [], selectedSeller = null;
+let activeConversation = null, teams = [], activeSport = "Football";
 
 const $ = id => document.getElementById(id);
+const safe = value => String(value ?? "").replace(/[&<>"']/g, c => ({
+  "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"
+}[c]));
 
-function escapeHTML(value) {
-  return String(value ?? "").replace(/[&<>"']/g, ch => ({
-    "&": "&amp;",
-    "<": "&lt;",
-    ">": "&gt;",
-    '"': "&quot;",
-    "'": "&#39;"
-  }[ch]));
-}
-
-function say(id, text, isError = false) {
+function say(id, message, error = false) {
   const el = $(id);
-  if (!el) return;
-  el.textContent = text || "";
-  el.classList.toggle("error-text", isError);
-  el.classList.toggle("error", isError);
+  if (el) {
+    el.textContent = message;
+    el.classList.toggle("error-text", error);
+  }
 }
-
-function toast(text) {
+function toast(message) {
   const el = $("toast");
   if (!el) return;
-  el.textContent = text;
+  el.textContent = message;
   el.hidden = false;
-  clearTimeout(toast.timer);
-  toast.timer = setTimeout(() => {
-    el.hidden = true;
-  }, 3500);
+  setTimeout(() => el.hidden = true, 3500);
+}
+function modal(id, show = true) {
+  if ($(id)) $(id).hidden = !show;
+  document.body.classList.toggle("modal-open", show);
+}
+function category(value) {
+  const s = String(value || "").toLowerCase();
+  if (s.includes("football") || s.includes("soccer")) return "Football";
+  if (s.includes("basket")) return "Basketball";
+  if (s.includes("tennis")) return "Tennis";
+  return "Other";
+}
+function dateText(value) {
+  if (!value) return "Date not specified";
+  const d = new Date(value + "T12:00:00");
+  return isNaN(d) ? safe(value) :
+    d.toLocaleDateString(undefined, {day:"numeric",month:"short",year:"numeric"});
 }
 
-function setBusy(button, busy, label) {
-  if (!button) return;
-  button.disabled = busy;
-
-  if (busy && label) {
-    button.dataset.oldLabel = button.textContent;
-    button.textContent = label;
-  } else if (!busy && button.dataset.oldLabel) {
-    button.textContent = button.dataset.oldLabel;
-    delete button.dataset.oldLabel;
-  }
-}
-
-function showModal(id) {
-  const modal = $(id);
-  if (!modal) return;
-  modal.hidden = false;
-  document.body.classList.add("modal-open");
-}
-
-function hideModal(id) {
-  const modal = $(id);
-  if (modal) modal.hidden = true;
-
-  if (!document.querySelector(".modal:not([hidden])")) {
-    document.body.classList.remove("modal-open");
-  }
-}
-
-function currentText(en, he) {
-  return language === "he" ? he : en;
-}
-
-function formatDate(value) {
-  if (!value) return currentText("Date not specified", "התאריך לא צוין");
-
-  const date = new Date(
-    String(value).length === 10 ? value + "T12:00:00" : value
+function showPage(id) {
+  ["home","tickets","teamHub","memorabilia","reviews","sell","alerts"].forEach(page => {
+    if ($(page)) $(page).hidden = page !== id;
+  });
+  if ($("ticker")) $("ticker").hidden = id !== "home";
+  document.querySelectorAll("[data-page]").forEach(button =>
+    button.classList.toggle("active", button.dataset.page === id)
   );
-
-  if (Number.isNaN(date.getTime())) return String(value);
-
-  return date.toLocaleDateString(
-    language === "he" ? "he-IL" : "en-GB",
-    { day: "numeric", month: "short", year: "numeric" }
-  );
+  if (id === "tickets") renderTickets();
+  if (id === "memorabilia") renderMemorabilia();
+  if (id === "teamHub") loadTeams();
+  if (id === "reviews") loadReviews();
+  window.scrollTo({top:0,behavior:"smooth"});
 }
 
-function formatPrice(value) {
-  const price = Number(value);
-  return Number.isFinite(price)
-    ? "€" + price.toFixed(2)
-    : currentText("Price unavailable", "המחיר אינו זמין");
+function updateAuth() {
+  const signed = !!currentUser;
+  if ($("openAuth")) $("openAuth").textContent =
+    signed ? (currentUser.email || "Profile") : "Profile / Sign in";
+  if ($("signOut")) $("signOut").hidden = !signed;
+  if ($("authTitle")) $("authTitle").textContent =
+    authMode === "signup" ? "Create account" : "Sign in";
+  if ($("authSubmit")) $("authSubmit").textContent =
+    authMode === "signup" ? "Create account" : "Sign in";
+  if ($("email")) $("email").disabled = signed;
+  if ($("password")) $("password").disabled = signed;
+  if ($("authSubmit")) $("authSubmit").hidden = signed;
+  if ($("switchAuth")) $("switchAuth").hidden = signed;
+  if (signed && $("authMsg")) $("authMsg").textContent =
+    "Signed in as " + currentUser.email;
 }
 
-/* LANGUAGE */
-
-function updateLanguage(next) {
-  language = next;
-  document.documentElement.lang = next;
-  document.documentElement.dir = next === "he" ? "rtl" : "ltr";
-
-  document.querySelectorAll("[data-en][data-he]").forEach(el => {
-    const value = el.dataset[next];
-    if (value !== undefined) el.innerHTML = value;
-  });
-
-  document.querySelectorAll(
-    "[data-en-placeholder][data-he-placeholder]"
-  ).forEach(el => {
-    el.placeholder = el.dataset[next + "Placeholder"] || "";
-  });
-
-  const langButton = $("lang");
-  if (langButton) {
-    langButton.textContent = next === "en" ? "עברית" : "English";
-  }
-
-  const ticketFilter = $("tf");
-  if (ticketFilter) {
-    const labels = next === "he"
-      ? ["כל ענפי הספורט", "כדורגל", "כדורסל", "טניס", "ענפי ספורט אחרים"]
-      : ["All sports", "Football", "Basketball", "Tennis", "Other sports"];
-
-    [...ticketFilter.options].forEach((option, index) => {
-      if (labels[index]) option.textContent = labels[index];
-    });
-  }
-
-  renderTickets();
-  renderMemorabilia();
-  updateAuthUI();
-}
-
-/* PAGE NAVIGATION */
-
-function goToPage(page) {
-  const pages = ["home", "tickets", "memorabilia", "sell", "alerts"];
-
-  if (!pages.includes(page)) return;
-
-  pages.forEach(id => {
-    const section = $(id);
-    if (section) section.hidden = id !== page;
-  });
-
-  document.querySelectorAll("[data-page]").forEach(button => {
-    button.classList.toggle("active", button.dataset.page === page);
-  });
-
-  if (page === "tickets") loadTickets();
-  if (page === "memorabilia") loadMemorabilia();
-
-  window.scrollTo({ top: 0, behavior: "smooth" });
-}
-
-/* ACCOUNT AND AUTHENTICATION */
-
-function updateAuthUI() {
-  const signedIn = !!currentUser;
-  const openButton = $("openAuth");
-
-  if (openButton) {
-    openButton.textContent = signedIn
-      ? currentText("My account", "החשבון שלי")
-      : currentText("Profile / Sign in", "פרופיל / כניסה");
-  }
-
-  const title = $("authTitle");
-  if (title) {
-    title.textContent = signedIn
-      ? currentText("Your account", "החשבון שלך")
-      : authMode === "signup"
-        ? currentText("Create account", "יצירת חשבון")
-        : currentText("Sign in", "כניסה לחשבון");
-  }
-
-  const submit = $("authSubmit");
-  if (submit) {
-    submit.textContent = authMode === "signup"
-      ? currentText("Create account", "יצירת חשבון")
-      : currentText("Sign in", "כניסה לחשבון");
-    submit.hidden = signedIn;
-  }
-
-  if ($("email")) $("email").disabled = signedIn;
-  if ($("password")) $("password").disabled = signedIn;
-  if ($("switchAuth")) $("switchAuth").hidden = signedIn;
-  if ($("signOut")) $("signOut").hidden = !signedIn;
-
-  const switchButton = $("switchAuth");
-  if (switchButton) {
-    switchButton.textContent = authMode === "signup"
-      ? currentText(
-          "Already have an account? Sign in",
-          "כבר יש לך חשבון? כניסה"
-        )
-      : currentText(
-          "Need an account? Sign up",
-          "אין לך חשבון? הרשמה"
-        );
-  }
-
-  const sellTicket = $("chooseTicket");
-  const sellMem = $("chooseMem");
-
-  if (sellTicket) sellTicket.disabled = false;
-  if (sellMem) sellMem.disabled = false;
-
-  if (signedIn) {
-    say(
-      "authMsg",
-      currentText(
-        "Signed in as " + (currentUser.email || "your account") + ".",
-        "מחובר בתור " + (currentUser.email || "החשבון שלך") + "."
-      )
-    );
-  }
-}
-
-function openAuth() {
-  updateAuthUI();
-  say("authMsg", currentUser
-    ? currentText("You are signed in.", "אתה מחובר.")
-    : "");
-  showModal("authModal");
-}
-
-async function handleAuth(event) {
+async function authSubmit(event) {
   event.preventDefault();
-
-  if (!db) {
-    say("authMsg", "Ticketly is still connecting. Refresh and try again.", true);
-    return;
-  }
-
-  const email = $("email")?.value.trim();
-  const password = $("password")?.value;
-  const button = $("authSubmit");
-
-  if (!email || !password) {
-    say("authMsg", "Enter your email and password.", true);
-    return;
-  }
-
-  if (password.length < 6) {
-    say("authMsg", "Your password must contain at least 6 characters.", true);
-    return;
-  }
-
-  setBusy(button, true, "Please wait…");
-  say("authMsg", "");
-
+  const email = $("email").value.trim();
+  const password = $("password").value;
+  $("authSubmit").disabled = true;
+  say("authMsg","Please wait...");
   try {
     if (authMode === "signup") {
-      const { data, error } = await db.auth.signUp({
-        email,
-        password,
-        options: {
-          emailRedirectTo: window.location.origin + window.location.pathname
-        }
-      });
-
+      const {data,error} = await db.auth.signUp({email,password});
       if (error) throw error;
-
-      if (data.session && data.user) {
+      if (data.session) {
         currentUser = data.user;
-        updateAuthUI();
-        say("authMsg", "Your account has been created and you are signed in.");
-        toast("Account created successfully.");
+        updateAuth();
+        say("authMsg","Account created and signed in.");
       } else {
-        say(
-          "authMsg",
-          "Account request created. If email confirmation is enabled in Supabase, check your inbox and confirm your email before signing in."
-        );
+        say("authMsg","Account created. Check your email if confirmation is required.");
       }
     } else {
-      const { data, error } = await db.auth.signInWithPassword({
-        email,
-        password
-      });
-
+      const {data,error} = await db.auth.signInWithPassword({email,password});
       if (error) throw error;
-
       currentUser = data.user;
-      updateAuthUI();
-      hideModal("authModal");
+      updateAuth();
+      modal("authModal",false);
       toast("Signed in successfully.");
     }
   } catch (error) {
-    console.error("Authentication error:", error);
-    say("authMsg", error.message || "Account action failed. Please try again.", true);
+    say("authMsg",error.message,true);
   } finally {
-    setBusy(button, false);
-    updateAuthUI();
+    $("authSubmit").disabled = false;
   }
 }
 
 async function signOut() {
-  if (!db) return;
-
-  const { error } = await db.auth.signOut();
-
-  if (error) {
-    say("authMsg", error.message, true);
-    return;
-  }
-
+  const {error} = await db.auth.signOut();
+  if (error) return toast(error.message);
   currentUser = null;
-  authMode = "signin";
-  updateAuthUI();
-  hideModal("authModal");
+  updateAuth();
   toast("Signed out.");
 }
 
-/* LISTING CARDS */
-
-function photoURL(item) {
-  return item.image_url || item.photo_url || item.image || "";
-}
-
-function cardHTML(item, kind) {
-  const isMem = kind === "mem";
-  const title = isMem ? item.title : item.event_name;
-  const category = item.category || (isMem ? "Other" : "Football");
-  const country = item.country || "Location not specified";
-  const date = isMem ? "" : formatDate(item.event_date);
-  const image = photoURL(item);
-  const id = String(item.id);
-
-  return `
-    <article class="card">
-      <button type="button" class="card-open"
-        data-open-item="${escapeHTML(id)}" data-kind="${kind}">
-        ${
-          image
-            ? `<img class="card-image" src="${escapeHTML(image)}"
-                 alt="${escapeHTML(title)}" loading="lazy">`
-            : `<div class="card-image">${isMem ? "★" : "⚽"}</div>`
-        }
-        <div class="card-content">
-          <div class="card-top">
-            <span class="pill">${escapeHTML(category)}</span>
-            <span class="card-date">${escapeHTML(date)}</span>
-          </div>
-          <h3>${escapeHTML(title)}</h3>
-          <p class="card-location">📍 ${escapeHTML(country)}</p>
-          <div class="card-bottom">
-            <strong>${escapeHTML(formatPrice(item.price))}</strong>
-            <span>${isMem ? "Memorabilia" : "Sports ticket"}</span>
-          </div>
-        </div>
-      </button>
-      <div class="card-contact">
-        <button type="button" data-contact-item="${escapeHTML(id)}"
-          data-kind="${kind}">
-          ${currentText("View details / Contact seller", "פרטים / יצירת קשר")}
-        </button>
+function card(item,type) {
+  const title = type === "ticket" ? item.event_name : item.title;
+  const image = item.image_url
+    ? `<img src="${safe(item.image_url)}" alt="${safe(title)}">`
+    : `<div class="card-placeholder">${type === "ticket" ? "⚽" : "★"}</div>`;
+  return `<article class="listing-card ticket-card" tabindex="0" role="button"
+    data-open-type="${type}" data-open-id="${safe(item.id)}">
+    ${image}
+    <div class="ticket-card-inner">
+      <div class="ticket-card-top">
+        <span class="ticket-category">${safe(type === "ticket" ? category(item.category) : item.category)}</span>
+        <span class="ticket-date">${type === "ticket" ? dateText(item.event_date) : "Collectible"}</span>
       </div>
-    </article>`;
+      <h3>${safe(title || "Untitled listing")}</h3>
+      <p class="ticket-country">📍 ${safe(item.country || "Location not specified")}</p>
+      <div class="ticket-card-bottom">
+        <strong>€${Number(item.price).toFixed(2)}</strong>
+        <span class="ticket-label">View details →</span>
+      </div>
+    </div>
+  </article>`;
 }
-
-/* SPORTS TICKETS */
 
 function renderTickets() {
-  const grid = $("ticketGrid");
-  if (!grid) return;
-
-  const query = (
-    $("ts")?.value ||
-    $("heroQuery")?.value ||
-    ""
-  ).trim().toLowerCase();
-
-  const category = $("tf")?.value || "All";
-
-  const results = allTickets.filter(ticket => {
-    const cat = String(ticket.category || "").toLowerCase();
-
-    const sports = ![
-      "concert", "music", "festival", "theatre", "theater"
-    ].some(word => cat.includes(word));
-
-    const text = [
-      ticket.event_name,
-      ticket.country,
-      ticket.category,
-      ticket.description
-    ].join(" ").toLowerCase();
-
-    return sports &&
-      (category === "All" || ticket.category === category) &&
-      text.includes(query);
-  });
-
-  grid.innerHTML = results.map(ticket => cardHTML(ticket, "ticket")).join("");
-
-  if ($("ticketError")) {
-    $("ticketError").textContent = results.length
-      ? ""
-      : allTickets.length
-        ? currentText(
-            "No matching sports tickets found.",
-            "לא נמצאו כרטיסי ספורט מתאימים."
-          )
-        : currentText(
-            "No sports tickets have been listed yet.",
-            "עדיין לא פורסמו כרטיסי ספורט."
-          );
-  }
+  if (!$("ticketGrid")) return;
+  const q = ($("ts").value || "").toLowerCase();
+  const filter = $("tf").value;
+  const rows = tickets.filter(t =>
+    (filter === "All" || category(t.category) === filter) &&
+    `${t.event_name} ${t.country} ${t.description || ""}`.toLowerCase().includes(q)
+  );
+  $("ticketGrid").innerHTML = rows.length
+    ? rows.map(t => card(t,"ticket")).join("")
+    : "<p>No sports tickets found. Try another search.</p>";
+}
+function renderMemorabilia() {
+  if (!$("memGrid")) return;
+  const q = ($("ms").value || "").toLowerCase();
+  const filter = $("mf").value;
+  const rows = memorabilia.filter(m =>
+    (filter === "All" || m.category === filter) &&
+    `${m.title} ${m.country} ${m.description || ""} ${m.category || ""}`.toLowerCase().includes(q)
+  );
+  $("memGrid").innerHTML = rows.length
+    ? rows.map(m => card(m,"mem")).join("")
+    : "<p>No memorabilia listings found.</p>";
 }
 
 async function loadTickets() {
-  if (!db) return;
-
-  const grid = $("ticketGrid");
-  if (grid && !allTickets.length) grid.innerHTML = "<p>Loading tickets…</p>";
-
-  try {
-    const { data, error } = await db
-      .from("tickets")
-      .select("*")
-      .order("created_at", { ascending: false });
-
-    if (error) throw error;
-
-    allTickets = data || [];
-    renderTickets();
-  } catch (error) {
-    console.error("Loading tickets:", error);
-    say("ticketError", "Could not load tickets: " + error.message, true);
-  }
+  const {data,error} = await db.from("tickets").select("*").order("created_at",{ascending:false});
+  if (error) throw error;
+  tickets = (data || []).filter(t =>
+    ["Football","Basketball","Tennis","Other"].includes(category(t.category))
+  );
+  renderTickets();
 }
-
-/* MEMORABILIA */
-
-function renderMemorabilia() {
-  const grid = $("memGrid");
-  if (!grid) return;
-
-  const query = ($("ms")?.value || "").trim().toLowerCase();
-  const category = $("mf")?.value || "All";
-
-  const results = allMemorabilia.filter(item => {
-    const text = [
-      item.title,
-      item.category,
-      item.country,
-      item.description
-    ].join(" ").toLowerCase();
-
-    return (category === "All" || item.category === category) &&
-      text.includes(query);
-  });
-
-  grid.innerHTML = results.map(item => cardHTML(item, "mem")).join("");
-
-  if ($("memError")) {
-    $("memError").textContent = results.length
-      ? ""
-      : allMemorabilia.length
-        ? "No memorabilia matches your search."
-        : "No memorabilia listed yet. Check that the memorabilia table exists in Supabase.";
-  }
-}
-
 async function loadMemorabilia() {
-  if (!db) return;
-
-  try {
-    const { data, error } = await db
-      .from("memorabilia")
-      .select("*")
-      .order("created_at", { ascending: false });
-
-    if (error) throw error;
-
-    allMemorabilia = data || [];
+  const {data,error} = await db.from("memorabilia").select("*").order("created_at",{ascending:false});
+  if (error) {
+    memorabilia = [];
+    say("memError","Could not load memorabilia: " + error.message,true);
     renderMemorabilia();
-  } catch (error) {
-    console.error("Loading memorabilia:", error);
-    say(
-      "memError",
-      "Could not load memorabilia. Check the memorabilia table and its Supabase permissions. " +
-        error.message,
-      true
-    );
-  }
-}
-
-/* LISTING DETAILS */
-
-function findItem(kind, id) {
-  const list = kind === "mem" ? allMemorabilia : allTickets;
-  return list.find(item => String(item.id) === String(id));
-}
-
-function openItemDetails(kind, id) {
-  const item = findItem(kind, id);
-
-  if (!item) {
-    toast("This listing is no longer available. Refresh the page.");
     return;
   }
-
-  activeItem = { kind, item };
-
-  const title = kind === "mem" ? item.title : item.event_name;
-  const image = photoURL(item);
-  const date = kind === "mem" ? "" : formatDate(item.event_date);
-  const detail = $("detailContent");
-
-  if (!detail) {
-    toast("The listing details panel is missing from index.html.");
-    return;
-  }
-
-  detail.innerHTML = `
-    <div class="detail-layout">
-      <div>
-        ${
-          image
-            ? `<img class="detail-image" src="${escapeHTML(image)}"
-                 alt="${escapeHTML(title)}">`
-            : `<div class="card-image detail-image">${kind === "mem" ? "★" : "⚽"}</div>`
-        }
-      </div>
-      <div>
-        <span class="pill">${escapeHTML(item.category || "Other")}</span>
-        <h2>${escapeHTML(title)}</h2>
-        <p class="muted">${kind === "mem" ? "Memorabilia" : "Sports ticket"}</p>
-        <p class="detail-price">${escapeHTML(formatPrice(item.price))}</p>
-        ${date ? `<p>📅 ${escapeHTML(date)}</p>` : ""}
-        <p>📍 ${escapeHTML(item.country || "Location not specified")}</p>
-        <p>${escapeHTML(item.description || "No additional description provided.")}</p>
-        <button class="primary full" type="button"
-          data-contact-item="${escapeHTML(String(item.id))}"
-          data-kind="${kind}">Contact seller</button>
-      </div>
-    </div>`;
-
-  showModal("detailModal");
+  memorabilia = data || [];
+  renderMemorabilia();
 }
 
-/* SELLING */
+async function uploadPhoto(input) {
+  const file = input?.files?.[0];
+  if (!file) return null;
+  if (!file.type.startsWith("image/")) throw Error("Choose an image file.");
+  if (file.size > 5 * 1024 * 1024) throw Error("Images must be 5 MB or smaller.");
+  if (!currentUser) throw Error("Please sign in before uploading a photo.");
+  const ext = (file.name.split(".").pop() || "jpg").replace(/[^a-z0-9]/gi,"").toLowerCase();
+  const path = `${currentUser.id}/${Date.now()}.${ext}`;
+  const {error} = await db.storage.from("ticket-photos").upload(path,file,{
+    upsert:false,contentType:file.type
+  });
+  if (error) throw error;
+  return db.storage.from("ticket-photos").getPublicUrl(path).data.publicUrl;
+}
 
-function openSellForm(kind) {
+async function publish(event,type) {
+  event.preventDefault();
   if (!currentUser) {
     authMode = "signin";
-    openAuth();
-    say("authMsg", "Please sign in before publishing a listing.");
+    updateAuth();
+    modal("authModal");
     return;
   }
-
-  if ($("sellChoices")) $("sellChoices").hidden = true;
-  if ($("sellForms")) $("sellForms").hidden = false;
-  if ($("ticketForm")) $("ticketForm").hidden = kind !== "ticket";
-  if ($("memForm")) $("memForm").hidden = kind !== "mem";
-
-  window.scrollTo({ top: 0, behavior: "smooth" });
-}
-
-function backSellChoices() {
-  if ($("sellChoices")) $("sellChoices").hidden = false;
-  if ($("sellForms")) $("sellForms").hidden = true;
-  if ($("ticketForm")) $("ticketForm").hidden = true;
-  if ($("memForm")) $("memForm").hidden = true;
-}
-
-async function uploadPhoto(file) {
-  if (!file) return null;
-
-  if (!file.type.startsWith("image/")) {
-    throw new Error("Please choose an image file.");
-  }
-
-  if (file.size > 5 * 1024 * 1024) {
-    throw new Error("Images must be 5 MB or smaller.");
-  }
-
-  const ext = (file.name.split(".").pop() || "jpg")
-    .toLowerCase()
-    .replace(/[^a-z0-9]/g, "");
-
-  const path = `${currentUser.id}/${crypto.randomUUID()}.${ext}`;
-
-  const { error } = await db.storage
-    .from("ticket-photos")
-    .upload(path, file, {
-      cacheControl: "3600",
-      upsert: false,
-      contentType: file.type
-    });
-
-  if (error) throw new Error("Photo upload failed: " + error.message);
-
-  const { data } = db.storage.from("ticket-photos").getPublicUrl(path);
-  return data.publicUrl;
-}
-
-async function publishTicket(event) {
-  event.preventDefault();
-
-  if (!currentUser) {
-    openAuth();
-    return;
-  }
-
-  const button = $("ticketSubmit");
-  setBusy(button, true, "Publishing…");
-  say("ticketMsg", "");
-
+  const isTicket = type === "ticket";
+  const form = $(isTicket ? "ticketForm" : "memForm");
+  const message = isTicket ? "ticketMsg" : "memMsg";
+  const button = $(isTicket ? "ticketSubmit" : "memSubmit");
+  button.disabled = true;
+  say(message,"Publishing...");
   try {
-    const image = await uploadPhoto($("ticketPhoto")?.files[0]);
-
-    const ticket = {
-      event_name: $("eventName").value.trim(),
-      category: $("eventCategory").value,
-      country: $("eventCountry").value.trim(),
-      event_date: $("eventDate").value || null,
-      price: Number($("ticketPrice").value),
-      description: $("ticketDescription").value.trim(),
-      user_id: currentUser.id
-    };
-
-    if (image) ticket.image_url = image;
-
-    const { error } = await db.from("tickets").insert(ticket);
-    if (error) throw error;
-
-    $("ticketForm").reset();
-    say("ticketMsg", "Your ticket has been published!");
-    toast("Ticket published.");
-
-    await loadTickets();
-    goToPage("tickets");
-  } catch (error) {
-    console.error("Publish ticket:", error);
-    say("ticketMsg", "Could not publish ticket: " + error.message, true);
-  } finally {
-    setBusy(button, false);
-  }
-}
-
-async function publishMemorabilia(event) {
-  event.preventDefault();
-
-  if (!currentUser) {
-    openAuth();
-    return;
-  }
-
-  const button = $("memSubmit");
-  setBusy(button, true, "Publishing…");
-  say("memMsg", "");
-
-  try {
-    const image = await uploadPhoto($("memPhoto")?.files[0]);
-
-    const item = {
-      title: $("memTitle").value.trim(),
-      category: $("memCategory").value,
-      country: $("memCountry").value.trim(),
-      price: Number($("memPrice").value),
-      description: $("memDescription").value.trim(),
-      user_id: currentUser.id
-    };
-
-    if (image) item.image_url = image;
-
-    const { error } = await db.from("memorabilia").insert(item);
-    if (error) throw error;
-
-    $("memForm").reset();
-    say("memMsg", "Your memorabilia has been published!");
-    toast("Memorabilia published.");
-
-    await loadMemorabilia();
-    goToPage("memorabilia");
-  } catch (error) {
-    console.error("Publish memorabilia:", error);
-    say("memMsg", "Could not publish item: " + error.message, true);
-  } finally {
-    setBusy(button, false);
-  }
-}
-
-/* MESSAGES */
-
-function openContact(kind, id) {
-  if (!currentUser) {
-    openAuth();
-    say("authMsg", "Sign in to contact a seller.");
-    return;
-  }
-
-  const item = findItem(kind, id);
-  if (!item) {
-    toast("Listing not found.");
-    return;
-  }
-
-  if (!item.user_id) {
-    toast("This listing has no linked seller account.");
-    return;
-  }
-
-  if (item.user_id === currentUser.id) {
-    toast("This is your own listing.");
-    return;
-  }
-
-  activeItem = { kind, item };
-
-  if ($("contactTitle")) {
-    $("contactTitle").textContent = "Message seller — " +
-      (kind === "mem" ? item.title : item.event_name);
-  }
-
-  if ($("firstMessage")) $("firstMessage").value = "";
-  say("contactMsg", "");
-  showModal("contactModal");
-}
-
-async function sendFirstMessage(event) {
-  event.preventDefault();
-
-  if (!currentUser || !activeItem || !db) return;
-
-  const item = activeItem.item;
-  const kind = activeItem.kind;
-  const sellerId = item.user_id;
-
-  if (!sellerId || sellerId === currentUser.id) {
-    say("contactMsg", "This seller cannot be contacted.", true);
-    return;
-  }
-
-  const button = $("contactForm")?.querySelector("button[type=submit]");
-  setBusy(button, true, "Sending…");
-
-  try {
-    const table = kind === "mem" ? "mem_conversations" : "conversations";
-    const itemKey = kind === "mem" ? "item_id" : "ticket_id";
-    const messagesTable = kind === "mem" ? "mem_messages" : "messages";
-
-    const { data: existing, error: findError } = await db
-      .from(table)
-      .select("*")
-      .contains("participant_ids", [currentUser.id])
-      .contains("participant_ids", [sellerId]);
-
-    if (findError) throw findError;
-
-    let conversation = (existing || []).find(c =>
-      String(kind === "mem" ? c.item_id : c.ticket_id) === String(item.id)
-    );
-
-    if (!conversation) {
-      const { data, error } = await db
-        .from(table)
-        .insert({
-          [itemKey]: item.id,
-          participant_ids: [currentUser.id, sellerId]
-        })
-        .select("*")
-        .single();
-
-      if (error) throw error;
-      conversation = data;
+    const image_url = await uploadPhoto($(isTicket ? "ticketPhoto" : "memPhoto"));
+    let row;
+    if (isTicket) {
+      row = {
+        event_name:$("eventName").value.trim(),
+        category:$("eventCategory").value,
+        country:$("eventCountry").value.trim(),
+        event_date:$("eventDate").value,
+        price:Number($("ticketPrice").value),
+        description:$("ticketDescription").value.trim(),
+        user_id:currentUser.id
+      };
+    } else {
+      row = {
+        title:$("memTitle").value.trim(),
+        category:$("memCategory").value,
+        country:$("memCountry").value.trim(),
+        price:Number($("memPrice").value),
+        description:$("memDescription").value.trim(),
+        user_id:currentUser.id
+      };
     }
-
-    const { error: sendError } = await db.from(messagesTable).insert({
-      conversation_id: conversation.id,
-      sender_id: currentUser.id,
-      body: $("firstMessage").value.trim()
-    });
-
-    if (sendError) throw sendError;
-
-    hideModal("contactModal");
-    toast("Message sent.");
-    await openMessages();
+    if (image_url) row.image_url = image_url;
+    const {error} = await db.from(isTicket ? "tickets" : "memorabilia").insert(row);
+    if (error) throw error;
+    form.reset();
+    say(message,"Published successfully!");
+    if (isTicket) {
+      await loadTickets();
+      showPage("tickets");
+    } else {
+      await loadMemorabilia();
+      showPage("memorabilia");
+    }
   } catch (error) {
-    console.error("Send message:", error);
-    say("contactMsg", "Could not send message: " + error.message, true);
+    say(message,"Could not publish: " + error.message,true);
   } finally {
-    setBusy(button, false);
+    button.disabled = false;
+  }
+}
+
+async function openDetails(type,id) {
+  const item = (type === "ticket" ? tickets : memorabilia)
+    .find(x => String(x.id) === String(id));
+  if (!item) return toast("This listing is no longer available.");
+  const title = type === "ticket" ? item.event_name : item.title;
+  $("detailContent").innerHTML = `
+    <div class="detail-layout">
+      <div>${item.image_url
+        ? `<img class="detail-image" src="${safe(item.image_url)}" alt="${safe(title)}">`
+        : `<div class="detail-art">${type === "ticket" ? "⚽" : "★"}</div>`}
+      </div>
+      <div class="detail-info">
+        <p class="eyebrow">${safe(type === "ticket" ? category(item.category) : item.category)} · LISTING</p>
+        <h2>${safe(title)}</h2>
+        ${type === "ticket" ? `<p>📅 ${dateText(item.event_date)}</p>` : ""}
+        <p>📍 ${safe(item.country || "Location not specified")}</p>
+        <p>${safe(item.description || "No additional description provided.")}</p>
+        <h2>€${Number(item.price).toFixed(2)}</h2>
+        <div id="sellerProfileArea"></div>
+        <button class="primary full" id="detailContact">Contact seller</button>
+      </div>
+    </div>`;
+  modal("detailModal");
+  if (item.user_id) showSellerProfile(item.user_id,type);
+  $("detailContact").onclick = () => {
+    if (!currentUser) {
+      modal("detailModal",false);
+      authMode = "signin";
+      updateAuth();
+      modal("authModal");
+      return;
+    }
+    if (!item.user_id) return toast("Seller account unavailable.");
+    if (item.user_id === currentUser.id) return toast("This is your own listing.");
+    selectedSeller = {id:item.user_id,type,item};
+    $("contactTitle").textContent = "Message seller about " + title;
+    modal("detailModal",false);
+    modal("contactModal");
+  };
+}
+
+async function showSellerProfile(sellerId,kind) {
+  const table = kind === "mem" ? "memorabilia" : "tickets";
+  const [listings,sales,reviews] = await Promise.all([
+    db.from(table).select("id",{count:"exact",head:true}).eq("user_id",sellerId),
+    db.from("ticket_sales").select("id",{count:"exact",head:true})
+      .eq("seller_id",sellerId).eq("status","completed"),
+    db.from("seller_reviews").select("rating,review,created_at")
+      .eq("seller_id",sellerId).order("created_at",{ascending:false})
+  ]);
+  const area = $("sellerProfileArea");
+  if (!area) return;
+  const rows = reviews.data || [];
+  const average = rows.length ? rows.reduce((sum,r) => sum + Number(r.rating),0) / rows.length : 0;
+  area.innerHTML = `
+    <div class="seller-panel">
+      <h3>Seller profile</h3>
+      <p><b>Active listings:</b> ${listings.count ?? "—"}</p>
+      <p><b>Completed ticket sales:</b> ${sales.count ?? 0}</p>
+      <p><b>Rating:</b> ${rows.length ? average.toFixed(1)+"/5 ("+rows.length+" reviews)" : "No reviews yet"}</p>
+      <button class="hub-button" id="writeReview">Write a review</button>
+      <div id="sellerReviewForm" hidden>
+        <form id="sellerReviewSubmit">
+          <label>Rating
+            <select id="sellerRating" required>
+              <option value="">Choose rating</option>
+              <option value="5">5 stars</option><option value="4">4 stars</option>
+              <option value="3">3 stars</option><option value="2">2 stars</option>
+              <option value="1">1 star</option>
+            </select>
+          </label>
+          <textarea id="sellerReviewText" maxlength="1000" placeholder="Your experience"></textarea>
+          <button class="primary">Submit review</button>
+        </form>
+      </div>
+    </div>`;
+  $("writeReview").onclick = () => {
+    if (!currentUser) {
+      modal("authModal");
+      return;
+    }
+    if (currentUser.id === sellerId) return toast("You cannot review yourself.");
+    $("sellerReviewForm").hidden = false;
+  };
+  $("sellerReviewSubmit").onsubmit = async event => {
+    event.preventDefault();
+    const {error} = await db.from("seller_reviews").insert({
+      seller_id:sellerId,
+      reviewer_id:currentUser.id,
+      rating:Number($("sellerRating").value),
+      review:$("sellerReviewText").value.trim()
+    });
+    if (error) return toast(error.message);
+    toast("Review submitted.");
+    showSellerProfile(sellerId,kind);
+  };
+}
+
+async function beginContact(event) {
+  event.preventDefault();
+  if (!currentUser || !selectedSeller) return;
+  const {id:sellerId,item} = selectedSeller;
+  say("contactMsg","Sending...");
+  try {
+    const {data:conversation,error} = await db.from("conversations")
+      .select("*").contains("participant_ids",[currentUser.id,sellerId])
+      .eq("ticket_id",item.id).limit(1).maybeSingle();
+    if (error) throw error;
+    let conv = conversation;
+    if (!conv) {
+      const result = await db.from("conversations").insert({
+        ticket_id:item.id,
+        participant_ids:[currentUser.id,sellerId]
+      }).select("*").single();
+      if (result.error) throw result.error;
+      conv = result.data;
+    }
+    const {error:messageError} = await db.from("messages").insert({
+      conversation_id:conv.id,
+      sender_id:currentUser.id,
+      body:$("firstMessage").value.trim()
+    });
+    if (messageError) throw messageError;
+    $("contactForm").reset();
+    modal("contactModal",false);
+    toast("Message sent.");
+  } catch (error) {
+    say("contactMsg","Could not send: " + error.message,true);
   }
 }
 
 async function openMessages() {
   if (!currentUser) {
-    openAuth();
-    say("authMsg", "Sign in to use messages.");
+    modal("authModal");
     return;
   }
-
-  showModal("messagesModal");
-
-  if ($("chat")) $("chat").hidden = true;
-  if ($("conversationList")) $("conversationList").hidden = false;
-
-  say("messagesMsg", "Loading messages…");
-
-  try {
-    const all = [];
-
-    for (const kind of ["ticket", "mem"]) {
-      const table = kind === "mem" ? "mem_conversations" : "conversations";
-
-      const { data, error } = await db
-        .from(table)
-        .select("*")
-        .contains("participant_ids", [currentUser.id])
-        .order("updated_at", { ascending: false });
-
-      if (error && kind === "ticket") throw error;
-      if (data) data.forEach(c => all.push({ ...c, kind }));
-    }
-
-    const list = $("conversationList");
-    if (!list) return;
-
-    if (!all.length) {
-      list.innerHTML = "<p>You have no conversations yet.</p>";
-      say("messagesMsg", "");
-      return;
-    }
-
-    list.innerHTML = all.map(c => `
-      <button class="conversation-button" type="button"
-        data-conversation="${escapeHTML(c.id)}" data-kind="${c.kind}">
-        <strong>${c.kind === "mem" ? "Memorabilia conversation" : "Ticket conversation"}</strong>
-        <span class="muted"> · ${escapeHTML(formatDate(c.updated_at || c.created_at))}</span>
-      </button>
-    `).join("");
-
-    say("messagesMsg", "");
-  } catch (error) {
-    console.error("Load conversations:", error);
-    say("messagesMsg", "Could not load messages: " + error.message, true);
-  }
+  modal("messagesModal");
+  $("conversationList").innerHTML = "Loading...";
+  $("chat").hidden = true;
+  const {data,error} = await db.from("conversations").select("*")
+    .contains("participant_ids",[currentUser.id]).order("updated_at",{ascending:false});
+  if (error) return say("messagesMsg",error.message,true);
+  const rows = data || [];
+  $("conversationList").innerHTML = rows.length ? rows.map(c =>
+    `<button class="conversation-item" data-conv="${safe(c.id)}">Conversation · ${new Date(c.updated_at || c.created_at).toLocaleDateString()}</button>`
+  ).join("") : "No conversations yet.";
+  $("conversationList").querySelectorAll("[data-conv]").forEach(button => {
+    button.onclick = () => loadChat(button.dataset.conv);
+  });
+}
+async function loadChat(id) {
+  activeConversation = id;
+  const {data,error} = await db.from("messages").select("*")
+    .eq("conversation_id",id).order("created_at",{ascending:true});
+  if (error) return say("messagesMsg",error.message,true);
+  $("chat").hidden = false;
+  $("chatBody").innerHTML = (data || []).map(m =>
+    `<div class="bubble ${m.sender_id === currentUser.id ? "mine" : ""}">
+      ${safe(m.body)}<small>${new Date(m.created_at).toLocaleString()}</small>
+    </div>`
+  ).join("");
+  $("chatBody").scrollTop = $("chatBody").scrollHeight;
+}
+async function reply(event) {
+  event.preventDefault();
+  if (!activeConversation || !currentUser) return;
+  const body = $("replyText").value.trim();
+  if (!body) return;
+  const {error} = await db.from("messages").insert({
+    conversation_id:activeConversation,sender_id:currentUser.id,body
+  });
+  if (error) return say("messagesMsg",error.message,true);
+  $("replyText").value = "";
+  await loadChat(activeConversation);
 }
 
-async function openConversation(id, kind) {
-  activeConversation = { id, kind };
-
-  const table = kind === "mem" ? "mem_messages" : "messages";
-
-  try {
-    const { data, error } = await db
-      .from(table)
-      .select("*")
-      .eq("conversation_id", id)
-      .order("created_at", { ascending: true });
-
-    if (error) throw error;
-
-    $("chatBody").innerHTML = (data || []).map(message => `
-      <div class="message ${message.sender_id === currentUser.id ? "mine" : ""}">
-        ${escapeHTML(message.body)}
-        <small>${escapeHTML(formatDate(message.created_at))}</small>
+/* TEAM HUB */
+async function loadTeams() {
+  $("teamGrid").innerHTML = "<p>Loading clubs...</p>";
+  const {data,error} = await db.from("teams").select("*").order("name");
+  if (error) {
+    $("teamGrid").innerHTML = `<p class="error">Could not load teams: ${safe(error.message)}</p>`;
+    return;
+  }
+  teams = data || [];
+  renderTeams();
+}
+function renderTeams() {
+  const query = ($("teamSearch").value || "").toLowerCase();
+  const rows = teams.filter(t =>
+    t.sport === activeSport &&
+    `${t.name} ${t.league || ""}`.toLowerCase().includes(query)
+  );
+  $("teamGrid").innerHTML = rows.length ? rows.map(t => `
+    <button class="team-button" data-team-id="${safe(t.id)}">
+      ${t.logo_url ? `<img src="${safe(t.logo_url)}" alt="">` : `<b>${activeSport === "Football" ? "⚽" : "🏀"}</b>`}
+      <span><b>${safe(t.name)}</b><small>${safe(t.league || activeSport)}</small></span>
+    </button>`).join("") :
+    `<p>No ${activeSport.toLowerCase()} clubs added yet. The clubs need to be entered in your Supabase teams table.</p>`;
+}
+async function openTeam(id) {
+  const team = teams.find(t => String(t.id) === String(id));
+  if (!team) return;
+  const box = $("teamDetail");
+  box.innerHTML = `
+    <div class="hub-panel">
+      <div class="team-heading">
+        ${team.logo_url ? `<img src="${safe(team.logo_url)}" width="65" alt="">` : ""}
+        <h2>${safe(team.name)}</h2>
+        <p class="muted">${safe(team.league || "")}</p>
       </div>
-    `).join("");
-
-    $("chat").hidden = false;
-    $("conversationList").hidden = true;
-    say("messagesMsg", "");
-    $("chatBody").scrollTop = $("chatBody").scrollHeight;
-  } catch (error) {
-    say("messagesMsg", "Could not open conversation: " + error.message, true);
-  }
-}
-
-async function sendReply(event) {
-  event.preventDefault();
-
-  if (!currentUser || !activeConversation) return;
-
-  const text = $("replyText").value.trim();
-  if (!text) return;
-
-  const table = activeConversation.kind === "mem"
-    ? "mem_messages"
-    : "messages";
-
-  const button = $("replyForm")?.querySelector("button");
-  setBusy(button, true, "Sending…");
-
-  try {
-    const { error } = await db.from(table).insert({
-      conversation_id: activeConversation.id,
-      sender_id: currentUser.id,
-      body: text
-    });
-
-    if (error) throw error;
-
-    $("replyText").value = "";
-    await openConversation(activeConversation.id, activeConversation.kind);
-  } catch (error) {
-    say("messagesMsg", "Could not send reply: " + error.message, true);
-  } finally {
-    setBusy(button, false);
-  }
-}
-
-/* TEAM ALERT PREFERENCES */
-
-function saveAlerts(event) {
-  event.preventDefault();
-
-  const email = $("alertEmail")?.value.trim() || "";
-  const teams = [
-    ...document.querySelectorAll('input[name="teams"]:checked')
-  ].map(input => input.value);
-
-  try {
-    localStorage.setItem("ticketlyAlerts", JSON.stringify({ email, teams }));
-    say(
-      "alertsMsg",
-      "Preferences saved in this browser. Email notifications are not active until an email service is configured."
-    );
-  } catch (error) {
-    say("alertsMsg", "Could not save preferences in this browser.", true);
-  }
-}
-
-function restoreAlerts() {
-  try {
-    const saved = JSON.parse(localStorage.getItem("ticketlyAlerts") || "null");
-    if (!saved) return;
-
-    if ($("alertEmail")) $("alertEmail").value = saved.email || "";
-
-    document.querySelectorAll('input[name="teams"]').forEach(input => {
-      input.checked = (saved.teams || []).includes(input.value);
-    });
-  } catch (error) {
-    console.warn("Could not restore alerts:", error);
-  }
-}
-
-/* BUTTONS AND EVENT LISTENERS */
-
-function bindEvents() {
-  document.querySelectorAll("[data-page]").forEach(button => {
-    button.addEventListener("click", event => {
-      event.preventDefault();
-      goToPage(button.dataset.page);
-    });
-  });
-
-  $("lang")?.addEventListener("click", () => {
-    updateLanguage(language === "en" ? "he" : "en");
-  });
-
-  $("openAuth")?.addEventListener("click", openAuth);
-  $("signOut")?.addEventListener("click", signOut);
-  $("authForm")?.addEventListener("submit", handleAuth);
-
-  $("switchAuth")?.addEventListener("click", () => {
-    authMode = authMode === "signup" ? "signin" : "signup";
-    say("authMsg", "");
-    updateAuthUI();
-  });
-
-  document.querySelectorAll("[data-close]").forEach(button => {
-    button.addEventListener("click", () => hideModal(button.dataset.close));
-  });
-
-  document.querySelectorAll(".modal").forEach(modal => {
-    modal.addEventListener("click", event => {
-      if (event.target === modal) hideModal(modal.id);
-    });
-  });
-
-  document.addEventListener("keydown", event => {
-    if (event.key === "Escape") {
-      document.querySelectorAll(".modal:not([hidden])").forEach(modal => {
-        hideModal(modal.id);
-      });
-    }
-  });
-
-  $("chooseTicket")?.addEventListener("click", () => openSellForm("ticket"));
-  $("chooseMem")?.addEventListener("click", () => openSellForm("mem"));
-  $("backSell")?.addEventListener("click", backSellChoices);
-
-  $("ticketForm")?.addEventListener("submit", publishTicket);
-  $("memForm")?.addEventListener("submit", publishMemorabilia);
-
-  $("ts")?.addEventListener("input", renderTickets);
-  $("tf")?.addEventListener("change", renderTickets);
-  $("ms")?.addEventListener("input", renderMemorabilia);
-  $("mf")?.addEventListener("change", renderMemorabilia);
-
-  $("heroSearch")?.addEventListener("submit", event => {
+      <button class="hub-button primary-hub" id="followTeam">Follow team</button>
+      <h3>Fan posts</h3>
+      <form id="teamPostForm">
+        <textarea id="teamPostText" maxlength="1500" required placeholder="Share an update about ${safe(team.name)}..."></textarea>
+        <button class="primary">Publish post</button>
+      </form>
+      <div id="teamPosts">Loading posts...</div>
+    </div>`;
+  const {data:followRows} = await db.from("team_follows").select("user_id")
+    .eq("team_id",team.id);
+  let following = (followRows || []).some(x => x.user_id === currentUser?.id);
+  $("followTeam").textContent = following ? "Following ✓" : "Follow team";
+  $("followTeam").onclick = async () => {
+    if (!currentUser) return modal("authModal");
+    const result = following
+      ? await db.from("team_follows").delete().eq("team_id",team.id).eq("user_id",currentUser.id)
+      : await db.from("team_follows").insert({team_id:team.id,user_id:currentUser.id});
+    if (result.error) return toast(result.error.message);
+    following = !following;
+    $("followTeam").textContent = following ? "Following ✓" : "Follow team";
+  };
+  $("teamPostForm").onsubmit = async event => {
     event.preventDefault();
-
-    if ($("ts") && $("heroQuery")) {
-      $("ts").value = $("heroQuery").value;
-    }
-
-    goToPage("tickets");
-    renderTickets();
-  });
-
-  $("messagesOpen")?.addEventListener("click", openMessages);
-  $("contactForm")?.addEventListener("submit", sendFirstMessage);
-  $("replyForm")?.addEventListener("submit", sendReply);
-  $("alertsForm")?.addEventListener("submit", saveAlerts);
-
-  document.addEventListener("click", event => {
-    const target = event.target instanceof Element ? event.target : null;
-    if (!target) return;
-
-    const openButton = target.closest("[data-open-item]");
-    const contactButton = target.closest("[data-contact-item]");
-    const conversationButton = target.closest("[data-conversation]");
-
-    if (openButton) {
-      openItemDetails(
-        openButton.dataset.kind,
-        openButton.dataset.openItem
-      );
-    } else if (contactButton) {
-      openContact(
-        contactButton.dataset.kind,
-        contactButton.dataset.contactItem
-      );
-    } else if (conversationButton) {
-      openConversation(
-        conversationButton.dataset.conversation,
-        conversationButton.dataset.kind
-      );
-    }
-  });
+    if (!currentUser) return modal("authModal");
+    const {error} = await db.from("team_posts").insert({
+      team_id:team.id,user_id:currentUser.id,body:$("teamPostText").value.trim()
+    });
+    if (error) return toast(error.message);
+    $("teamPostText").value = "";
+    await loadTeamPosts(team.id);
+  };
+  await loadTeamPosts(team.id);
+}
+async function loadTeamPosts(id) {
+  const {data,error} = await db.from("team_posts").select("*")
+    .eq("team_id",id).order("created_at",{ascending:false}).limit(50);
+  $("teamPosts").innerHTML = error ? safe(error.message) :
+    (data || []).length ? data.map(post => `
+      <article class="hub-post"><p>${safe(post.body)}</p>
+      <small class="muted">${new Date(post.created_at).toLocaleString()}</small></article>
+    `).join("") : "<p>No posts yet. Start the conversation!</p>";
+}
+async function loadReviews() {
+  $("reviewsList").innerHTML = "Loading reviews...";
+  const {data,error} = await db.from("seller_reviews").select("*")
+    .order("created_at",{ascending:false}).limit(100);
+  if (error) {
+    $("reviewsList").innerHTML = `<p class="error">${safe(error.message)}</p>`;
+    return;
+  }
+  $("reviewsList").innerHTML = (data || []).length ? data.map(r => `
+    <article class="review-card">
+      <b class="green">${"★".repeat(Number(r.rating))}${"☆".repeat(5-Number(r.rating))}</b>
+      <p>${safe(r.review || "No written comment.")}</p>
+      <small class="muted">${new Date(r.created_at).toLocaleDateString()}</small>
+    </article>`).join("") : "<p>No reviews have been submitted yet.</p>";
 }
 
-/* START THE WEBSITE */
+/* STARTUP AND EVENT LISTENERS */
+document.addEventListener("DOMContentLoaded", async () => {
+  document.querySelectorAll("[data-page]").forEach(button =>
+    button.addEventListener("click",() => showPage(button.dataset.page))
+  );
+  $("openAuth").onclick = () => { updateAuth(); modal("authModal"); };
+  $("signOut").onclick = signOut;
+  $("authForm").addEventListener("submit",authSubmit);
+  $("switchAuth").onclick = () => {
+    authMode = authMode === "signup" ? "signin" : "signup";
+    say("authMsg","");
+    updateAuth();
+  };
+  document.querySelectorAll("[data-close]").forEach(button =>
+    button.addEventListener("click",() => modal(button.dataset.close,false))
+  );
+  $("chooseTicket").onclick = () => {
+    $("sellChoices").hidden = true;
+    $("sellForms").hidden = false;
+    $("ticketForm").hidden = false;
+    $("memForm").hidden = true;
+  };
+  $("chooseMem").onclick = () => {
+    $("sellChoices").hidden = true;
+    $("sellForms").hidden = false;
+    $("ticketForm").hidden = true;
+    $("memForm").hidden = false;
+  };
+  $("backSell").onclick = () => {
+    $("sellChoices").hidden = false;
+    $("sellForms").hidden = true;
+  };
+  $("ticketForm").addEventListener("submit",e => publish(e,"ticket"));
+  $("memForm").addEventListener("submit",e => publish(e,"mem"));
+  $("contactForm").addEventListener("submit",beginContact);
+  $("messagesOpen").onclick = openMessages;
+  $("replyForm").addEventListener("submit",reply);
+  $("ts").addEventListener("input",renderTickets);
+  $("tf").addEventListener("change",renderTickets);
+  $("ms").addEventListener("input",renderMemorabilia);
+  $("mf").addEventListener("change",renderMemorabilia);
+  $("teamSearch").addEventListener("input",renderTeams);
 
-async function startTicketly() {
-  bindEvents();
-  restoreAlerts();
-  updateAuthUI();
+  document.querySelectorAll("[data-sport]").forEach(button => {
+    button.onclick = () => {
+      activeSport = button.dataset.sport;
+      document.querySelectorAll("[data-sport]").forEach(b =>
+        b.classList.toggle("active",b === button)
+      );
+      $("teamDetail").innerHTML = "";
+      renderTeams();
+    };
+  });
+  $("teamGrid").addEventListener("click",event => {
+    const button = event.target.closest("[data-team-id]");
+    if (button) openTeam(button.dataset.teamId);
+  });
+  document.addEventListener("click",event => {
+    const item = event.target.closest("[data-open-type]");
+    if (item) openDetails(item.dataset.openType,item.dataset.openId);
+  });
+  document.addEventListener("keydown",event => {
+    if (event.key === "Escape") {
+      document.querySelectorAll(".modal").forEach(m => m.hidden = true);
+    }
+  });
+  $("heroSearch").addEventListener("submit",event => {
+    event.preventDefault();
+    $("ts").value = $("heroQuery").value;
+    showPage("tickets");
+  });
+  $("lang").onclick = () => toast("Hebrew translation is not yet complete in this version.");
 
   try {
-    if (!window.supabase?.createClient) {
-      throw new Error(
-        "Supabase did not load. Check your internet connection and refresh."
-      );
-    }
-
-    db = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY, {
-      auth: {
-        persistSession: true,
-        autoRefreshToken: true,
-        detectSessionInUrl: true
-      }
+    if (!window.supabase?.createClient) throw Error("Supabase did not load. Refresh the page.");
+    db = window.supabase.createClient(SUPABASE_URL,SUPABASE_KEY,{
+      auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true}
     });
-
-    const { data, error } = await db.auth.getSession();
+    const {data,error} = await db.auth.getSession();
     if (error) throw error;
-
     currentUser = data.session?.user || null;
-    updateAuthUI();
-
-    db.auth.onAuthStateChange((_event, session) => {
+    updateAuth();
+    db.auth.onAuthStateChange((_event,session) => {
       currentUser = session?.user || null;
-      updateAuthUI();
+      updateAuth();
     });
-
     await loadTickets();
     await loadMemorabilia();
   } catch (error) {
-    console.error("Ticketly startup error:", error);
-    say("ticketError", "Ticketly could not connect: " + error.message, true);
-    say("memError", "Ticketly could not connect: " + error.message, true);
+    console.error(error);
+    say("ticketError","Ticketly connection error: " + error.message,true);
+    say("memError","Ticketly connection error: " + error.message,true);
   }
-}
-
-document.addEventListener("DOMContentLoaded", startTicketly);
+});
