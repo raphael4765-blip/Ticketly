@@ -1,222 +1,128 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en" dir="ltr">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>Ticketly — The World, Live</title>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#f5f3eb">
+  <title>Ticketly — Sports Marketplace</title>
   <link rel="stylesheet" href="style.css">
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script defer src="script.js"></script>
 </head>
 <body>
-<header class="topbar">
-  <a class="brand" href="#" onclick="showPage('home');return false">
-    <span class="brand-icon">✳</span>
-    TICKETLY<span class="orange">.</span>
-  </a>
-  <nav>
-    <button class="active" data-page="home">⌂ <span data-en="Home" data-he="בית">Home</span></button>
-    <button data-page="tickets">◎ <span data-en="Explore" data-he="גילוי אירועים">Explore</span></button>
-    <button data-page="teams">⚽ <span data-en="Teams" data-he="קבוצות">Teams</span></button>
-    <button data-page="sell">＋ <span data-en="Sell" data-he="מכירה">Sell</span></button>
-    <button data-page="memorabilia">★ <span data-en="Memorabilia" data-he="מזכרות">Memorabilia</span></button>
-    <button data-page="alerts">♧ <span data-en="My Alerts" data-he="ההתראות שלי">My Alerts</span></button>
-    <button id="messagesOpen">☏ <span data-en="Messages" data-he="הודעות">Messages</span></button>
-    <button id="openAuth"><span data-en="Profile" data-he="פרופיל">Profile</span></button>
-    <button id="signOut" hidden data-en="Sign out" data-he="התנתקות">Sign out</button>
+<header class="header">
+  <a class="logo" href="#" data-page="home">TICKETLY<span>.</span></a>
+  <nav id="navigation">
+    <button data-page="home" data-i18n="home">Home</button>
+    <button data-page="tickets" data-i18n="tickets">Tickets</button>
+    <button data-page="teams" data-i18n="teams">Teams</button>
+    <button data-page="competitions" data-i18n="competitions">Competitions</button>
+    <button data-page="memorabilia" data-i18n="memorabilia">Memorabilia</button>
+    <button data-page="sell" data-i18n="sell">Sell</button>
+    <button data-page="alerts" data-i18n="alerts">My alerts</button>
+    <button data-page="messages" data-i18n="messages">Messages</button>
+    <button data-page="profile" data-i18n="profile">Profile</button>
   </nav>
-  <button id="lang" class="language">עברית</button>
+  <div class="header-actions">
+    <button id="languageButton" class="language">עברית</button>
+    <button id="accountButton" class="account-button" data-i18n="signIn">Sign in</button>
+  </div>
+  <button id="mobileMenu" class="mobile-menu" aria-label="Menu">☰</button>
 </header>
 
-<main>
-  <section class="hero" id="home">
+<div id="notice" class="notice" hidden></div>
+<main id="app">
+  <section class="hero">
     <div class="hero-copy">
-      <div class="eyebrow"><span></span><span data-en="THE WORLD, LIVE" data-he="העולם, בשידור חי">THE WORLD, LIVE</span></div>
-      <h1>
-        <span data-en="Be there" data-he="תהיו שם">Be there</span><br>
-        <span data-en="when " data-he="כשהרגע">when </span><span class="green" data-en="it" data-he="הוא">it</span><br>
-        <span class="green" data-en="happens." data-he="מתרחש.">happens.</span>
-      </h1>
-      <p data-en="The big nights. The once-in-a-lifetime days. Find your place in the crowd, wherever it is."
-         data-he="הלילות הגדולים. הרגעים של פעם בחיים. מצאו את המקום שלכם בקהל, בכל מקום בעולם.">
-        The big nights. The once-in-a-lifetime days. Find your place in the crowd, wherever it is.
-      </p>
-      <form id="heroSearch" class="searchbar">
-        <span class="search-icon">⌕</span>
-        <input id="heroQuery" placeholder="Artist, team, venue or city"
-          data-en-placeholder="Artist, team, venue or city"
-          data-he-placeholder="אמן, קבוצה, מקום או עיר">
-        <button type="submit" class="primary" data-en="Find tickets →" data-he="מצאו כרטיסים ←">Find tickets →</button>
+      <span class="eyebrow" data-i18n="eyebrow">THE SPORTS MARKETPLACE</span>
+      <h1 data-i18n="heroTitle">Your team.<br>Your tickets.<br><em>Your moment.</em></h1>
+      <p data-i18n="heroText">Discover football and basketball tickets and memorabilia from fans around the world.</p>
+      <form id="heroSearch" class="search-bar">
+        <input id="heroQuery" data-i18n-placeholder="searchPlaceholder" placeholder="Search teams, matches or items">
+        <button class="primary" data-i18n="search">Search</button>
       </form>
-      <div class="trust"><span>♧</span>
-        <span data-en="Independent listings from around the world" data-he="מודעות עצמאיות מרחבי העולם">Independent listings from around the world</span>
+      <div class="sport-shortcuts">
+        <button data-sport="Football">⚽ <span data-i18n="football">Football</span></button>
+        <button data-sport="Basketball">🏀 <span data-i18n="basketball">Basketball</span></button>
       </div>
     </div>
-    <div class="poster-area">
-      <article class="poster poster-green">
-        <small>LONDON · 15 MAY 2027</small>
-        <div class="poster-circle"></div>
-        <div class="poster-content">
-          <span class="trophy">♜</span>
-          <strong data-en="NORTH<br>LONDON." data-he="צפון<br>לונדון.">NORTH<br>LONDON.</strong>
-        </div>
-        <small class="poster-bottom" data-en="THE CITY IS YOURS." data-he="העיר שלכם.">THE CITY IS YOURS.</small>
-      </article>
-      <article class="poster poster-orange">
-        <small>M. / 01</small>
-        <div class="poster-circle"></div>
-        <div class="poster-content">
-          <strong><span data-en="YOUR NEXT" data-he="הסיפור">YOUR NEXT</span><br>
-          <span class="light" data-en="story." data-he="הבא.">story.</span></strong>
-        </div>
-        <div class="stamp" data-en="LIVE<br>IT LOUD" data-he="לחיות<br>בעוצמה">LIVE<br>IT LOUD</div>
-        <small class="poster-bottom" data-en="FIND IT HERE →" data-he="מצאו את זה כאן ←">FIND IT HERE →</small>
-      </article>
-      <div class="poster-caption">
-        <span data-en="Where the world<br>comes to show up." data-he="המקום שבו העולם<br>נפגש.">Where the world<br>comes to show up.</span>
-        <span class="worldwide">01 — 04<br>WORLDWIDE</span>
-      </div>
+    <div class="hero-art">
+      <div class="hero-ball">⚽</div>
+      <div class="hero-label">TICKETLY / WORLDWIDE SPORTS</div>
+      <div class="hero-orange">LIVE<br>THE GAME.</div>
     </div>
   </section>
 
-  <section class="ticker" id="ticker">
-    <span>FOOTBALL</span> ✳ <span>LIVE MUSIC</span> ✳
-    <span>THEATRE</span> ✳ <span>MEMORABILIA</span> ✳
-    <span>FOOTBALL</span> ✳ <span>LIVE MUSIC</span>
+  <section class="home-section">
+    <div class="section-title">
+      <div><span class="eyebrow" data-i18n="discover">DISCOVER</span><h2 data-i18n="latestTickets">Latest tickets</h2></div>
+      <button class="text-link" data-page="tickets" data-i18n="viewAll">View all →</button>
+    </div>
+    <div id="homeTickets" class="card-grid"></div>
   </section>
 
-  <section id="tickets" class="market-section" hidden>
-    <div class="section-heading"><div>
-      <div class="eyebrow"><span></span> YOUR NEXT EXPERIENCE</div>
-      <h2>Find your <span class="green">moment.</span></h2>
-      <p>From match day to the front row.</p>
-    </div></div>
-    <div class="filters">
-      <input id="ts" placeholder="Search events...">
-      <select id="tf">
-        <option>All</option><option>Football</option><option>Basketball</option><option>Tennis</option><option>Other</option>
-      </select>
+  <section class="home-section">
+    <div class="section-title">
+      <div><span class="eyebrow" data-i18n="collect">COLLECT</span><h2 data-i18n="memorabilia">Memorabilia</h2></div>
+      <button class="text-link" data-page="memorabilia" data-i18n="viewAll">View all →</button>
     </div>
-    <div id="ticketGrid" class="grid"></div>
-    <p id="ticketError" class="error"></p>
+    <div id="homeMemorabilia" class="card-grid"></div>
   </section>
 
-  <section id="teams" class="market-section" hidden>
-    <div class="eyebrow"><span></span> ISRAELI SPORTS</div>
-    <h2>Follow your <span class="green">team.</span></h2>
-    <p>Explore clubs from Israel's top football and basketball leagues.</p>
-    <div class="team-tabs">
-      <button class="primary" id="footballTab">⚽ Football</button>
-      <button class="team-tab" id="basketballTab">🏀 Basketball</button>
+  <section class="home-section">
+    <div class="section-title">
+      <div><span class="eyebrow" data-i18n="followYourClub">FOLLOW YOUR CLUB</span><h2 data-i18n="popularTeams">Teams</h2></div>
+      <button class="text-link" data-page="teams" data-i18n="viewAll">View all →</button>
     </div>
-    <input id="teamSearch" class="team-search" placeholder="Search Israeli clubs...">
-    <div id="teamGrid" class="team-grid"></div>
-    <p id="teamCount" class="team-count"></p>
+    <div id="homeTeams" class="team-grid"></div>
   </section>
 
-  <section id="memorabilia" class="market-section memorabilia-section" hidden>
-    <div class="eyebrow"><span></span> OWN A PIECE OF THE GAME</div>
-    <h2>More than a <span class="green">memory.</span></h2>
-    <p>Discover signed shirts, match-worn gear and collectibles.</p>
-    <div class="filters">
-      <input id="ms" placeholder="Search memorabilia...">
-      <select id="mf">
-        <option>All</option><option>Match-worn shirt</option><option>Signed item</option><option>Other</option>
-      </select>
-    </div>
-    <div id="memGrid" class="grid"></div>
-    <p id="memError" class="error"></p>
-  </section>
-
-  <section id="sell" class="sell-section" hidden>
-    <div class="eyebrow"><span></span> SELL ON TICKETLY</div>
-    <h2>Give someone their <span class="green">moment.</span></h2>
-    <div id="sellChoices" class="sell-choices">
-      <button class="primary" id="chooseTicket">Sell a ticket</button>
-      <button class="secondary" id="chooseMem">Sell memorabilia</button>
-    </div>
-    <div id="sellForms" hidden>
-      <button id="backSell" class="text-button">← Back</button>
-      <form id="ticketForm" class="listing-form" hidden>
-        <h3>Ticket details</h3>
-        <label>Event name<input id="eventName" required maxlength="120"></label>
-        <label>Category<select id="eventCategory" required><option>Football</option><option>Basketball</option><option>Tennis</option><option>Other</option></select></label>
-        <label>Country / city<input id="eventCountry" required maxlength="100"></label>
-        <label>Event date<input id="eventDate" type="date" required></label>
-        <label>Price (€)<input id="ticketPrice" type="number" min="0" step=".01" required></label>
-        <label>Description<textarea id="ticketDescription" maxlength="2000"></textarea></label>
-        <label>Photo<input id="ticketPhoto" type="file" accept="image/*"></label>
-        <button class="primary" id="ticketSubmit">Publish ticket</button>
-        <p id="ticketMsg"></p>
-      </form>
-      <form id="memForm" class="listing-form" hidden>
-        <h3>Memorabilia details</h3>
-        <label>Item name<input id="memTitle" required maxlength="120"></label>
-        <label>Category<select id="memCategory"><option>Match-worn shirt</option><option>Signed item</option><option>Other</option></select></label>
-        <label>Country / city<input id="memCountry" maxlength="100"></label>
-        <label>Price (€)<input id="memPrice" type="number" min="0" step=".01" required></label>
-        <label>Description<textarea id="memDescription" maxlength="2000"></textarea></label>
-        <label>Photo<input id="memPhoto" type="file" accept="image/*"></label>
-        <button class="primary" id="memSubmit">Publish item</button>
-        <p id="memMsg"></p>
-      </form>
-    </div>
-  </section>
-
-  <section id="alerts" class="alerts-section" hidden>
-    <div class="eyebrow"><span></span> YOUR ALERTS</div>
-    <h2>Never miss <span class="green">out.</span></h2>
-    <p>Ticket alerts and team email subscriptions are not yet connected in this version.</p>
-    <button class="primary" id="alertsSignIn">Sign in to Ticketly</button>
+  <section class="home-section reviews">
+    <span class="eyebrow" data-i18n="community">THE COMMUNITY</span>
+    <h2 data-i18n="fanReviews">Fan experiences</h2>
+    <p data-i18n="reviewsNotice">Customer reviews will appear here after verified transactions are available.</p>
   </section>
 </main>
 
-<footer><span>TICKETLY.</span><span>Made for fans, everywhere.</span></footer>
+<footer><a class="logo" href="#">TICKETLY<span>.</span></a><span data-i18n="footer">Made for football and basketball fans, everywhere.</span></footer>
 
-<div class="modal" id="authModal" hidden>
-  <div class="dialog">
-    <button class="x" data-close="authModal">×</button>
-    <h2 id="authTitle">Sign in</h2>
+<div id="authModal" class="modal" hidden>
+  <div class="modal-panel">
+    <button class="close" data-close="authModal">×</button>
+    <h2 id="authHeading">Sign in</h2>
     <form id="authForm">
-      <label>Email<input id="email" type="email" required></label>
-      <label>Password<input id="password" type="password" minlength="6" required></label>
+      <label data-i18n="email">Email</label>
+      <input id="authEmail" type="email" required autocomplete="email">
+      <label data-i18n="password">Password</label>
+      <input id="authPassword" type="password" required minlength="6" autocomplete="current-password">
       <button class="primary full" id="authSubmit">Sign in</button>
     </form>
-    <button id="switchAuth" class="text-button">Need an account? Sign up</button>
-    <p id="authMsg"></p>
+    <button id="authSwitch" class="text-link">Create an account</button>
+    <button id="forgotPassword" class="text-link" data-i18n="forgotPassword">Forgot password?</button>
+    <button id="signOutButton" class="secondary full" hidden data-i18n="signOut">Sign out</button>
+    <p id="authMessage" class="form-message"></p>
   </div>
 </div>
 
-<div class="modal" id="contactModal" hidden>
-  <div class="dialog">
-    <button class="x" data-close="contactModal">×</button>
-    <h2 id="contactTitle">Message seller</h2>
-    <form id="contactForm">
-      <textarea id="firstMessage" required maxlength="2000" placeholder="Write a message"></textarea>
-      <button class="primary full">Send message</button>
-    </form>
-    <p id="contactMsg"></p>
+<div id="detailModal" class="modal" hidden>
+  <div class="modal-panel wide">
+    <button class="close" data-close="detailModal">×</button>
+    <div id="detailContent"></div>
   </div>
 </div>
 
-<div class="modal" id="messagesModal" hidden>
-  <div class="dialog wide">
-    <button class="x" data-close="messagesModal">×</button>
-    <h2>Messages / הודעות</h2>
+<div id="chatModal" class="modal" hidden>
+  <div class="modal-panel wide">
+    <button class="close" data-close="chatModal">×</button>
+    <h2 id="chatHeading" data-i18n="messages">Messages</h2>
     <div id="conversationList"></div>
-    <div id="chat" hidden>
-      <div id="chatBody"></div>
-      <form id="replyForm">
-        <input id="replyText" required maxlength="2000" placeholder="Write a reply">
-        <button class="primary">Send</button>
-      </form>
-    </div>
-    <p id="messagesMsg"></p>
+    <div id="chatMessages"></div>
+    <form id="messageForm">
+      <input id="messageInput" required maxlength="2000" data-i18n-placeholder="writeMessage" placeholder="Write a message">
+      <button class="primary" data-i18n="send">Send</button>
+    </form>
+    <p id="chatNotice" class="form-message"></p>
   </div>
-</div>
-<div id="toast" hidden></div>
-<div class="modal" id="detailModal" hidden>
-  <div class="dialog wide"><button class="x" data-close="detailModal">×</button><div id="detailContent"></div></div>
 </div>
 </body>
 </html>
