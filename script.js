@@ -1,469 +1,716 @@
+/* TICKETLY — football and basketball marketplace */
+
 const SUPABASE_URL = "https://lhmatsjxdkgoqubuezfi.supabase.co";
 const SUPABASE_KEY = "sb_publishable_jENZfb_D2Tws5sk3bkSkQA_BDvzdknA";
 
-let db, currentUser=null, authMode="signin", tickets=[], memorabilia=[];
-let selectedSeller=null, selectedItem=null, activeConversation=null;
-
+const db = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 const $ = id => document.getElementById(id);
-const safe = v => String(v ?? "").replace(/[&<>"']/g, c => ({
-  '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
-}[c]));
 
-function say(id,msg,error=false){
-  const el=$(id);
-  if(el){el.textContent=msg;el.classList.toggle('error-text',error);}
-}
-function modal(id,show=true){
-  const el=$(id);
-  if(el)el.hidden=!show;
-  document.body.classList.toggle('modal-open',show);
-}
-function toast(msg){
-  const el=$('toast');
-  if(el){el.textContent=msg;el.hidden=false;setTimeout(()=>el.hidden=true,3500);}
-}
-function category(v){
-  const s=String(v||'').toLowerCase();
-  if(s.includes('football')||s.includes('sport')||s.includes('soccer'))return 'Football';
-  if(s.includes('basket'))return 'Basketball';
-  if(s.includes('tennis'))return 'Tennis';
-  return 'Other';
-}
+let user = null;
+let language = localStorage.getItem("ticketly-language") || "en";
+let page = "home";
+let teamSport = "Football";
+let selectedTeam = null;
+let selectedConversation = null;
+let authMode = "signin";
+let ticketCache = [];
+let memorabiliaCache = [];
+let teamCache = [];
+let conversationCache = [];
 
-function showPage(id){
-  document.querySelectorAll('.market-section,.sell-section,.alerts-section,.hero,.ticker')
-    .forEach(x=>x.hidden=true);
-  const target=$(id);
-  if(target)target.hidden=false;
-  if(id==='home'&&$('ticker'))$('ticker').hidden=false;
-  document.querySelectorAll('[data-page]').forEach(b=>
-    b.classList.toggle('active',b.dataset.page===id)
-  );
-  if(id==='tickets')renderTickets();
-  if(id==='memorabilia')renderMemorabilia();
-  if(id==='teams')renderIsraeliTeams();
-  window.scrollTo({top:0,behavior:'smooth'});
-}
-
-function updateAuth(){
-  const signed=!!currentUser;
-  const open=$('openAuth');
-  if(open)open.textContent=signed?(currentUser.email||'Profile'):'Profile / Sign in';
-  if($('signOut'))$('signOut').hidden=!signed;
-  if($('authTitle'))$('authTitle').textContent=signed?'Your account':authMode==='signup'?'Create account':'Sign in';
-  if($('authSubmit')){
-    $('authSubmit').textContent=authMode==='signup'?'Create account':'Sign in';
-    $('authSubmit').hidden=signed;
+const translations = {
+  en: {
+    home:"Home",tickets:"Tickets",teams:"Teams",competitions:"Competitions",
+    memorabilia:"Memorabilia",sell:"Sell",alerts:"My alerts",messages:"Messages",
+    profile:"Profile",signIn:"Sign in",signOut:"Sign out",eyebrow:"THE SPORTS MARKETPLACE",
+    heroTitle:"Your team. Your tickets. Your moment.",
+    heroText:"Discover football and basketball tickets and memorabilia from fans around the world.",
+    searchPlaceholder:"Search teams, matches or items",search:"Search",football:"Football",
+    basketball:"Basketball",discover:"DISCOVER",latestTickets:"Latest tickets",
+    viewAll:"View all →",collect:"COLLECT",followYourClub:"FOLLOW YOUR CLUB",
+    popularTeams:"Teams",community:"THE COMMUNITY",fanReviews:"Fan experiences",
+    reviewsNotice:"Customer reviews will appear here after verified transactions are available.",
+    footer:"Made for football and basketball fans, everywhere.",email:"Email",
+    password:"Password",forgotPassword:"Forgot password?",writeMessage:"Write a message",
+    send:"Send",all:"All",searchListings:"Search listings",country:"Country",
+    price:"Price",date:"Date",sport:"Sport",team:"Team",competition:"Competition",
+    noTickets:"No tickets found.",noItems:"No memorabilia found.",
+    noTeams:"No teams have been added yet.",noCompetitions:"No competitions available yet.",
+    createAccount:"Create an account",alreadyAccount:"Already have an account? Sign in",
+    needAccount:"Need an account? Sign up",name:"Display name",description:"Description",
+    eventName:"Match or event name",eventDate:"Match date",quantity:"Quantity",
+    image:"Image",publish:"Publish listing",ticket:"Ticket",item:"Memorabilia item",
+    chooseType:"What would you like to sell?",sellTicket:"Sell a ticket",
+    sellItem:"Sell memorabilia",profileTitle:"Your profile",joined:"Joined",
+    sold:"Tickets sold",active:"Active listings",listed:"Tickets listed",
+    contact:"Message seller",save:"Save changes",follow:"Follow team",
+    unfollow:"Unfollow",noMessages:"No conversations yet.",writeFirst:"Start a conversation",
+    loginRequired:"Please sign in first.",loading:"Loading…",success:"Done!",
+    error:"Something went wrong.",homeEmpty:"No listings yet. Be the first to list one.",
+    homeTeams:"Explore teams",competitionPage:"Competitions and leagues",
+    countryPlaceholder:"Country",teamOptional:"Choose a team (optional)",
+    category:"Category",title:"Title",photo:"Photo",descriptionPlaceholder:"Describe the listing",
+    selectSport:"Select a sport",matchHome:"Home team",matchAway:"Away team",
+    section:"Seat or section (optional)",profilePicture:"Profile picture",
+    updateProfile:"Update profile",following:"Teams you follow",
+    noFollowing:"You are not following any teams yet."
+  },
+  he: {
+    home:"בית",tickets:"כרטיסים",teams:"קבוצות",competitions:"ליגות ותחרויות",
+    memorabilia:"מזכרות",sell:"מכירה",alerts:"ההתראות שלי",messages:"הודעות",
+    profile:"פרופיל",signIn:"התחברות",signOut:"התנתקות",eyebrow:"שוק הספורט",
+    heroTitle:"הקבוצה שלך. הכרטיסים שלך. הרגע שלך.",
+    heroText:"גלו כרטיסים ומזכרות של כדורגל וכדורסל מאוהדים ברחבי העולם.",
+    searchPlaceholder:"חיפוש קבוצות, משחקים או פריטים",search:"חיפוש",football:"כדורגל",
+    basketball:"כדורסל",discover:"גלו",latestTickets:"כרטיסים אחרונים",
+    viewAll:"הצג הכל ←",collect:"אספו",followYourClub:"עקבו אחרי הקבוצה שלכם",
+    popularTeams:"קבוצות",community:"הקהילה",fanReviews:"חוויות אוהדים",
+    reviewsNotice:"ביקורות לקוחות יוצגו כאן לאחר שיהיו עסקאות מאומתות.",
+    footer:"נוצר עבור אוהדי כדורגל וכדורסל בכל העולם.",email:"דוא״ל",
+    password:"סיסמה",forgotPassword:"שכחתם סיסמה?",writeMessage:"כתבו הודעה",
+    send:"שליחה",all:"הכל",searchListings:"חיפוש מודעות",country:"מדינה",
+    price:"מחיר",date:"תאריך",sport:"ענף ספורט",team:"קבוצה",competition:"תחרות",
+    noTickets:"לא נמצאו כרטיסים.",noItems:"לא נמצאו מזכרות.",
+    noTeams:"עדיין לא נוספו קבוצות.",noCompetitions:"אין תחרויות זמינות כרגע.",
+    createAccount:"יצירת חשבון",alreadyAccount:"כבר יש לכם חשבון? התחברו",
+    needAccount:"אין לכם חשבון? הירשמו",name:"שם לתצוגה",description:"תיאור",
+    eventName:"שם המשחק או האירוע",eventDate:"תאריך המשחק",quantity:"כמות",
+    image:"תמונה",publish:"פרסום מודעה",ticket:"כרטיס",item:"פריט מזכרת",
+    chooseType:"מה תרצו למכור?",sellTicket:"מכירת כרטיס",sellItem:"מכירת מזכרות",
+    profileTitle:"הפרופיל שלכם",joined:"תאריך הצטרפות",sold:"כרטיסים שנמכרו",
+    active:"מודעות פעילות",listed:"כרטיסים שפורסמו",contact:"שליחת הודעה למוכר",
+    save:"שמירת שינויים",follow:"עקבו אחרי הקבוצה",unfollow:"הפסקת מעקב",
+    noMessages:"אין שיחות עדיין.",writeFirst:"התחילו שיחה",
+    loginRequired:"יש להתחבר תחילה.",loading:"טוען…",success:"בוצע!",
+    error:"משהו השתבש.",homeEmpty:"אין מודעות עדיין. היו הראשונים לפרסם.",
+    homeTeams:"גלו קבוצות",competitionPage:"ליגות ותחרויות",
+    countryPlaceholder:"מדינה",teamOptional:"בחירת קבוצה (לא חובה)",
+    category:"קטגוריה",title:"כותרת",photo:"תמונה",descriptionPlaceholder:"תארו את המודעה",
+    selectSport:"בחרו ענף ספורט",matchHome:"קבוצה מארחת",matchAway:"קבוצה אורחת",
+    section:"מקום או יציע (לא חובה)",profilePicture:"תמונת פרופיל",
+    updateProfile:"עדכון פרופיל",following:"קבוצות במעקב",
+    noFollowing:"עדיין אינכם עוקבים אחרי קבוצות."
   }
-  if($('email'))$('email').disabled=signed;
-  if($('password'))$('password').disabled=signed;
-  if($('switchAuth'))$('switchAuth').hidden=signed;
-  if($('authMsg')&&!$('authMsg').textContent)
-    $('authMsg').textContent=signed?`Signed in as ${currentUser.email}`:'Sign in or create an account.';
+};
+
+function tr(key) {
+  return translations[language][key] || translations.en[key] || key;
 }
 
-async function authSubmit(e){
-  e.preventDefault();
-  if(!db)return say('authMsg','Account service is not connected. Refresh and try again.',true);
-  const email=$('email').value.trim(),password=$('password').value;
-  say('authMsg','Please wait…');
-  $('authSubmit').disabled=true;
-  try{
-    if(authMode==='signup'){
-      const {data,error}=await db.auth.signUp({email,password});
-      if(error)throw error;
-      if(data.session){
-        currentUser=data.user;updateAuth();say('authMsg','Account created and signed in.');
-      }else{
-        say('authMsg','Account created. Check your email if confirmation is enabled.');
-      }
-    }else{
-      const {data,error}=await db.auth.signInWithPassword({email,password});
-      if(error)throw error;
-      currentUser=data.user;updateAuth();say('authMsg','Signed in successfully.');
-      setTimeout(()=>modal('authModal',false),700);
-    }
-  }catch(err){
-    console.error(err);say('authMsg',err.message||'Account action failed.',true);
-  }finally{$('authSubmit').disabled=false;}
+function applyLanguage() {
+  document.documentElement.lang = language;
+  document.documentElement.dir = language === "he" ? "rtl" : "ltr";
+  $("languageButton").textContent = language === "en" ? "עברית" : "English";
+
+  document.querySelectorAll("[data-i18n]").forEach(el => {
+    const key = el.dataset.i18n;
+    if (tr(key)) el.textContent = tr(key);
+  });
+
+  document.querySelectorAll("[data-i18n-placeholder]").forEach(el => {
+    el.placeholder = tr(el.dataset.i18nPlaceholder);
+  });
+
+  localStorage.setItem("ticketly-language", language);
+  renderPage();
 }
 
-async function signOut(){
-  if(!db)return;
-  const {error}=await db.auth.signOut();
-  if(error)return toast(error.message);
-  currentUser=null;updateAuth();toast('Signed out.');
+function safe(value) {
+  return String(value ?? "").replace(/[&<>"']/g, c => ({
+    "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"
+  }[c]));
 }
 
-function dateText(v){
-  if(!v)return 'Date not specified';
-  const d=new Date(v+'T12:00:00');
-  return isNaN(d)?safe(v):d.toLocaleDateString(undefined,{day:'numeric',month:'short',year:'numeric'});
+function money(value) {
+  return "€" + Number(value || 0).toFixed(2);
 }
 
-function card(item,type){
-  const title=type==='ticket'?item.event_name:item.title;
-  const place=item.country||'';
-  const price=Number(item.price);
-  const image=item.image_url
-    ?`<img src="${safe(item.image_url)}" alt="${safe(title)}">`
-    :`<div class="card-placeholder">${type==='ticket'?'⚽':'★'}</div>`;
-  return `<article class="ticket-card listing-card" tabindex="0" role="button"
-    data-open-type="${type}" data-open-id="${safe(item.id)}">
+function showNotice(message, error = false) {
+  const el = $("notice");
+  el.textContent = message;
+  el.className = error ? "notice error" : "notice";
+  el.hidden = false;
+  window.scrollTo({top:0,behavior:"smooth"});
+}
+
+function empty(message) {
+  return `<div class="empty-card">${safe(message)}</div>`;
+}
+
+function openModal(id) {
+  $(id).hidden = false;
+}
+
+function closeModal(id) {
+  $(id).hidden = true;
+}
+
+function go(next) {
+  page = next;
+  selectedTeam = null;
+  renderPage();
+  document.querySelectorAll("nav [data-page]").forEach(b =>
+    b.classList.toggle("active", b.dataset.page === next)
+  );
+  window.scrollTo({top:0,behavior:"smooth"});
+}
+
+function listingCard(row, type = "ticket") {
+  const title = type === "ticket" ? row.event_name : row.title;
+  const image = row.image_url
+    ? `<img class="listing-image" src="${safe(row.image_url)}" alt="">`
+    : `<div class="listing-image"></div>`;
+  const sellerName = row.seller?.display_name || "Ticketly member";
+  const avatar = row.seller?.avatar_url || "";
+  const joined = row.seller?.created_at
+    ? new Date(row.seller.created_at).toLocaleDateString()
+    : "—";
+  const sold = Number(row.seller?.tickets_sold || 0);
+
+  return `<article class="listing-card" data-detail="${safe(row.id)}" data-type="${type}">
     ${image}
-    <div class="ticket-card-inner">
-      <div class="ticket-card-top">
-        <span class="ticket-category">${safe(type==='ticket'?category(item.category):(item.category||'Memorabilia'))}</span>
-        <span class="ticket-date">${type==='ticket'?safe(dateText(item.event_date)):'Collectible'}</span>
-      </div>
-      <h3>${safe(title||'Untitled listing')}</h3>
-      <p class="ticket-country">📍 ${safe(place)}</p>
-      <div class="ticket-card-bottom">
-        <strong>€${Number.isFinite(price)?price.toFixed(2):'—'}</strong>
-        <span class="ticket-label">View details →</span>
-      </div>
+    <h3>${safe(title)}</h3>
+    <p class="muted">${safe(row.sport || row.category || "")} · ${safe(row.country || "")}</p>
+    ${type === "ticket" ? `<p class="muted">${safe(row.event_date || "")}</p>` : ""}
+    <p>${safe(row.description || "")}</p>
+    <div class="price">${money(row.price)}</div>
+    <div class="seller">
+      <img class="avatar" src="${safe(avatar)}" alt="" onerror="this.style.display='none'">
+      <div><strong>${safe(sellerName)}</strong>
+      <span class="muted">${tr("joined")}: ${safe(joined)} · ${tr("sold")}: ${sold}</span></div>
     </div>
   </article>`;
 }
 
-function renderTickets(){
-  const grid=$('ticketGrid');
-  if(!grid)return;
-  const q=($('ts')?.value||'').toLowerCase(),f=$('tf')?.value||'All';
-  const rows=tickets.filter(t=>
-    ['Football','Basketball','Tennis','Other'].includes(category(t.category))&&
-    (f==='All'||category(t.category)===f)&&
-    `${t.event_name} ${t.country} ${t.description||''}`.toLowerCase().includes(q)
-  );
-  grid.innerHTML=rows.map(t=>card(t,'ticket')).join('');
-  if(!rows.length)grid.innerHTML='<p>No tickets found yet. Try another search or list the first ticket.</p>';
+async function attachSellers(rows) {
+  const ids = [...new Set(rows.map(x => x.user_id).filter(Boolean))];
+  if (!ids.length) return rows;
+  const {data} = await db.from("profiles")
+    .select("user_id,display_name,avatar_url,created_at,tickets_sold")
+    .in("user_id", ids);
+  const map = new Map((data || []).map(p => [p.user_id,p]));
+  return rows.map(r => ({...r,seller:map.get(r.user_id)}));
 }
 
-function renderMemorabilia(){
-  const grid=$('memGrid');
-  if(!grid)return;
-  const q=($('ms')?.value||'').toLowerCase(),f=$('mf')?.value||'All';
-  const rows=memorabilia.filter(m=>
-    (f==='All'||m.category===f)&&
-    `${m.title} ${m.country} ${m.description||''} ${m.category||''}`.toLowerCase().includes(q)
-  );
-  grid.innerHTML=rows.map(m=>card(m,'mem')).join('');
-  if(!rows.length)grid.innerHTML='<p>No memorabilia listings found yet. Be the first to list one.</p>';
+async function loadTickets() {
+  const {data,error} = await db.from("tickets")
+    .select("*").order("created_at",{ascending:false});
+  if (error) throw error;
+  ticketCache = await attachSellers(data || []);
+  return ticketCache;
 }
 
-async function loadTickets(){
-  const {data,error}=await db.from('tickets').select('*').order('created_at',{ascending:false});
-  if(error)throw error;
-  tickets=(data||[]).filter(t=>['Football','Basketball','Tennis','Other'].includes(category(t.category)));
-  renderTickets();
+async function loadMemorabilia() {
+  const {data,error} = await db.from("memorabilia")
+    .select("*").order("created_at",{ascending:false});
+  if (error) throw error;
+  memorabiliaCache = await attachSellers(data || []);
+  return memorabiliaCache;
 }
 
-async function loadMemorabilia(){
-  const {data,error}=await db.from('memorabilia').select('*').order('created_at',{ascending:false});
-  if(error){
-    memorabilia=[];
-    say('memError','Memorabilia table is not available yet. Check the Supabase setup SQL.',true);
-    renderMemorabilia();return;
-  }
-  memorabilia=data||[];say('memError','');renderMemorabilia();
+async function loadTeams() {
+  const {data,error} = await db.from("teams")
+    .select("*").order("name");
+  if (error) throw error;
+  teamCache = data || [];
+  return teamCache;
 }
 
-async function uploadPhoto(input){
-  const file=input?.files?.[0];
-  if(!file)return null;
-  if(!currentUser)throw Error('Please sign in before uploading a photo.');
-  if(file.size>5*1024*1024)throw Error('Please choose an image smaller than 5 MB.');
-  const ext=(file.name.split('.').pop()||'jpg').replace(/[^a-z0-9]/gi,'').toLowerCase()||'jpg';
-  const path=`${currentUser.id}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
-  const {error}=await db.storage.from('ticket-photos').upload(path,file,{upsert:false,contentType:file.type||'image/jpeg'});
-  if(error)throw error;
-  return db.storage.from('ticket-photos').getPublicUrl(path).data.publicUrl;
-}
-
-async function publish(e,type){
-  e.preventDefault();
-  if(!currentUser){
-    authMode='signin';updateAuth();modal('authModal');
-    return say(type==='ticket'?'ticketMsg':'memMsg','Please sign in before publishing.',true);
-  }
-  const isT=type==='ticket',form=$(isT?'ticketForm':'memForm');
-  const msg=isT?'ticketMsg':'memMsg',btn=$(isT?'ticketSubmit':'memSubmit');
-  btn.disabled=true;say(msg,'Publishing…');
-  try{
-    const image_url=await uploadPhoto($(isT?'ticketPhoto':'memPhoto'));
-    let row;
-    if(isT){
-      row={
-        event_name:$('eventName').value.trim(),category:$('eventCategory').value,
-        country:$('eventCountry').value.trim(),event_date:$('eventDate').value,
-        price:Number($('ticketPrice').value),description:$('ticketDescription').value.trim(),
-        image_url,user_id:currentUser.id
-      };
-    }else{
-      row={
-        title:$('memTitle').value.trim(),category:$('memCategory').value,
-        country:$('memCountry').value.trim(),price:Number($('memPrice').value),
-        description:$('memDescription').value.trim(),image_url,user_id:currentUser.id
-      };
-    }
-    const {error}=await db.from(isT?'tickets':'memorabilia').insert(row);
-    if(error)throw error;
-    form.reset();say(msg,'Published successfully!');
-    if(isT){await loadTickets();showPage('tickets');}
-    else{await loadMemorabilia();showPage('memorabilia');}
-  }catch(err){
-    console.error(err);say(msg,`Could not publish: ${err.message}`,true);
-  }finally{btn.disabled=false;}
-}
-
-function openDetails(type,id){
-  const item=(type==='ticket'?tickets:memorabilia).find(x=>String(x.id)===String(id));
-  if(!item)return;
-  selectedItem={type,item};
-  const title=type==='ticket'?item.event_name:item.title;
-  $('detailContent').innerHTML=`
-    <div class="detail-layout">
-      ${item.image_url?`<img class="detail-image" src="${safe(item.image_url)}" alt="${safe(title)}">`:`<div class="detail-art">${type==='ticket'?'90′':'MEMORABILIA'}</div>`}
-      <div class="detail-info">
-        <p class="eyebrow">${safe(type==='ticket'?category(item.category):(item.category||'Memorabilia'))} · LISTING</p>
-        <h2>${safe(title)}</h2>
-        ${type==='ticket'?`<p>📅 ${safe(dateText(item.event_date))}</p>`:''}
-        <p>📍 ${safe(item.country||'Location not specified')}</p>
-        <hr><p>${safe(item.description||'No additional description provided.')}</p>
-        <h2>€${Number(item.price).toFixed(2)}</h2>
-        <button class="primary full" id="detailContact">Contact seller</button>
+function renderHome() {
+  $("app").innerHTML = `
+  <section class="hero">
+    <div class="hero-copy">
+      <span class="eyebrow">${tr("eyebrow")}</span>
+      <h1>${tr("heroTitle").replaceAll(". ",".<br>")}</h1>
+      <p>${tr("heroText")}</p>
+      <form id="heroSearch" class="search-bar">
+        <input id="heroQuery" placeholder="${tr("searchPlaceholder")}">
+        <button class="primary">${tr("search")}</button>
+      </form>
+      <div class="sport-shortcuts">
+        <button data-sport="Football">⚽ ${tr("football")}</button>
+        <button data-sport="Basketball">🏀 ${tr("basketball")}</button>
       </div>
-    </div>`;
-  modal('detailModal');
-  $('detailContact').onclick=()=>{
-    if(!currentUser){
-      modal('detailModal',false);authMode='signin';updateAuth();modal('authModal');return;
-    }
-    if(!item.user_id){toast('Seller account unavailable for this listing.');return;}
-    if(item.user_id===currentUser.id){toast('This is your own listing.');return;}
-    selectedSeller={id:item.user_id,type,item};
-    $('contactTitle').textContent=`Message seller about ${title}`;
-    modal('detailModal',false);modal('contactModal');
-  };
+    </div>
+    <div class="hero-art"><div class="hero-ball">⚽</div>
+      <div class="hero-label">TICKETLY / WORLDWIDE SPORTS</div>
+      <div class="hero-orange">LIVE<br>THE GAME.</div></div>
+  </section>
+  <section class="home-section">
+    <div class="section-title"><h2>${tr("latestTickets")}</h2>
+      <button class="text-link" data-page="tickets">${tr("viewAll")}</button></div>
+    <div class="card-grid">${ticketCache.slice(0,3).map(x=>listingCard(x)).join("") || empty(tr("homeEmpty"))}</div>
+  </section>
+  <section class="home-section">
+    <div class="section-title"><h2>${tr("memorabilia")}</h2>
+      <button class="text-link" data-page="memorabilia">${tr("viewAll")}</button></div>
+    <div class="card-grid">${memorabiliaCache.slice(0,3).map(x=>listingCard(x,"memorabilia")).join("") || empty(tr("noItems"))}</div>
+  </section>
+  <section class="home-section">
+    <div class="section-title"><h2>${tr("popularTeams")}</h2>
+      <button class="text-link" data-page="teams">${tr("viewAll")}</button></div>
+    <div class="team-grid">${teamCache.slice(0,5).map(teamCard).join("") || empty(tr("noTeams"))}</div>
+  </section>
+  <section class="reviews"><h2>${tr("fanReviews")}</h2><p>${tr("reviewsNotice")}</p></section>`;
 }
 
-async function beginContact(e){
-  e.preventDefault();
-  if(!currentUser)return say('contactMsg','Please sign in first.',true);
-  if(!selectedSeller)return;
-  const {id:sellerId,type,item}=selectedSeller;
-  say('contactMsg','Sending…');
-  try{
-    const table=type==='ticket'?'conversations':'mem_conversations';
-    const foreign=type==='ticket'?'ticket_id':'item_id';
-    let {data:conv,error}=await db.from(table).select('*')
-      .contains('participant_ids',[currentUser.id,sellerId])
-      .eq(foreign,item.id).limit(1).maybeSingle();
-    if(error)throw error;
-    if(!conv){
-      const res=await db.from(table).insert({
-        [foreign]:item.id,participant_ids:[currentUser.id,sellerId]
-      }).select('*').single();
-      if(res.error)throw res.error;
-      conv=res.data;
-    }
-    const msgTable=type==='ticket'?'messages':'mem_messages';
-    const {error:me}=await db.from(msgTable).insert({
-      conversation_id:conv.id,sender_id:currentUser.id,body:$('firstMessage').value.trim()
-    });
-    if(me)throw me;
-    $('contactForm').reset();modal('contactModal',false);
-    toast('Message sent. Open Messages to continue.');
-  }catch(err){say('contactMsg',`Could not send message: ${err.message}`,true);}
+function teamCard(team) {
+  return `<article class="team-card" data-team="${safe(team.id)}">
+    ${team.logo_url ? `<img class="team-logo" src="${safe(team.logo_url)}" alt="${safe(team.name)}">` : ""}
+    <strong>${safe(team.name)}</strong>
+    <p class="muted">${safe(team.sport)} · ${safe(team.country || "")}</p>
+  </article>`;
 }
 
-async function openMessages(){
-  if(!currentUser){authMode='signin';updateAuth();modal('authModal');return;}
-  modal('messagesModal');say('messagesMsg','Loading messages…');
-  $('conversationList').innerHTML='';
-  $('chat').hidden=true;
-  try{
-    const all=[];
-    for(const type of ['ticket','mem']){
-      const table=type==='ticket'?'conversations':'mem_conversations';
-      const {data,error}=await db.from(table).select('*')
-        .contains('participant_ids',[currentUser.id])
-        .order('updated_at',{ascending:false});
-      if(error){console.warn(error);continue;}
-      (data||[]).forEach(c=>all.push({...c,_type:type}));
-    }
-    if(!all.length)say('messagesMsg','No conversations yet. Open a listing and contact its seller.');
-    else{
-      say('messagesMsg','');
-      $('conversationList').innerHTML=all.map(c=>
-        `<button class="conversation-item" data-conv="${safe(c.id)}" data-type="${c._type}">Conversation · ${new Date(c.updated_at||c.created_at).toLocaleDateString()}</button>`
-      ).join('');
-      $('conversationList').querySelectorAll('[data-conv]').forEach(b=>
-        b.onclick=()=>loadChat(b.dataset.type,b.dataset.conv)
-      );
-    }
-  }catch(err){say('messagesMsg',err.message,true);}
-}
-
-async function loadChat(type,id){
-  activeConversation={type,id};
-  const table=type==='ticket'?'messages':'mem_messages';
-  const {data,error}=await db.from(table).select('*')
-    .eq('conversation_id',id).order('created_at',{ascending:true});
-  if(error)return say('messagesMsg',error.message,true);
-  $('chat').hidden=false;
-  $('chatBody').innerHTML=(data||[]).map(m=>
-    `<div class="bubble ${m.sender_id===currentUser.id?'mine':''}">${safe(m.body)}<small>${new Date(m.created_at).toLocaleString()}</small></div>`
-  ).join('');
-  $('chatBody').scrollTop=$('chatBody').scrollHeight;
-}
-
-async function reply(e){
-  e.preventDefault();
-  if(!activeConversation||!currentUser)return;
-  const body=$('replyText').value.trim();
-  if(!body)return;
-  const table=activeConversation.type==='ticket'?'messages':'mem_messages';
-  const {error}=await db.from(table).insert({
-    conversation_id:activeConversation.id,sender_id:currentUser.id,body
-  });
-  if(error)return say('messagesMsg',error.message,true);
-  $('replyText').value='';
-  await loadChat(activeConversation.type,activeConversation.id);
-}
-
-/* Israeli first-division club directory.
-   This directory is display-only: it does not require a database table. */
-const israeliTeams={
-  football:[
-    "Beitar Jerusalem","Bnei Sakhnin","Hapoel Be'er Sheva","Hapoel Haifa",
-    "Hapoel Ironi Kiryat Shmona","Hapoel Petah Tikva","Hapoel Ramat Gan",
-    "Hapoel Tel Aviv","Hapoel Jerusalem","Ironi Tiberias","Maccabi Haifa",
-    "Maccabi Netanya","Maccabi Petah Tikva","Maccabi Tel Aviv"
-  ],
-  basketball:[
-    "Bnei Herzliya","Hapoel Be'er Sheva/Dimona","Hapoel Galil Elyon",
-    "Hapoel HaEmek","Hapoel Holon","Hapoel Ironi Eilat",
-    "Hapoel Jerusalem","Hapoel Tel Aviv","Ironi Kiryat Ata",
-    "Ironi Ness Ziona","Maccabi Ashdod","Maccabi Ironi Ramat Gan",
-    "Maccabi Rishon LeZion","Maccabi Tel Aviv"
-  ]
-};
-let activeTeamSport='football';
-
-function renderIsraeliTeams(){
-  const grid=$('teamGrid');
-  if(!grid)return;
-  const query=($('teamSearch')?.value||'').trim().toLowerCase();
-  const teams=israeliTeams[activeTeamSport].filter(team=>
-    team.toLowerCase().includes(query)
-  );
-  grid.innerHTML=teams.map(team=>`
-    <article class="team-card">
-      <div class="team-crest">${activeTeamSport==='football'?'⚽':'🏀'}</div>
-      <div class="team-info">
-        <h3>${safe(team)}</h3>
-        <p>${activeTeamSport==='football'?'Israeli Premier League':'Israeli Basketball Premier League'}</p>
-      </div>
-      <span class="team-country">🇮🇱</span>
-    </article>
-  `).join('');
-  if(!teams.length)grid.innerHTML='<p>No clubs match your search.</p>';
-  if($('teamCount'))$('teamCount').textContent=`${teams.length} clubs`;
-  $('footballTab')?.classList.toggle('primary',activeTeamSport==='football');
-  $('footballTab')?.classList.toggle('team-tab',activeTeamSport!=='football');
-  $('basketballTab')?.classList.toggle('primary',activeTeamSport==='basketball');
-  $('basketballTab')?.classList.toggle('team-tab',activeTeamSport!=='basketball');
-}
-
-function initialiseTeams(){
-  $('footballTab')?.addEventListener('click',()=>{
-    activeTeamSport='football';renderIsraeliTeams();
-  });
-  $('basketballTab')?.addEventListener('click',()=>{
-    activeTeamSport='basketball';renderIsraeliTeams();
-  });
-  $('teamSearch')?.addEventListener('input',renderIsraeliTeams);
-  renderIsraeliTeams();
-}
-
-document.addEventListener('DOMContentLoaded',async()=>{
-  document.querySelectorAll('[data-page]').forEach(b=>
-    b.addEventListener('click',()=>showPage(b.dataset.page))
-  );
-  $('openAuth')?.addEventListener('click',()=>{updateAuth();modal('authModal');});
-  $('signOut')?.addEventListener('click',signOut);
-  $('authForm')?.addEventListener('submit',authSubmit);
-  $('switchAuth')?.addEventListener('click',()=>{
-    authMode=authMode==='signup'?'signin':'signup';say('authMsg','');updateAuth();
-  });
-  document.querySelectorAll('[data-close]').forEach(b=>
-    b.addEventListener('click',()=>modal(b.dataset.close,false))
-  );
-  $('chooseTicket')?.addEventListener('click',()=>{
-    $('sellChoices').hidden=true;$('sellForms').hidden=false;
-    $('ticketForm').hidden=false;$('memForm').hidden=true;
-  });
-  $('chooseMem')?.addEventListener('click',()=>{
-    $('sellChoices').hidden=true;$('sellForms').hidden=false;
-    $('ticketForm').hidden=true;$('memForm').hidden=false;
-  });
-  $('backSell')?.addEventListener('click',()=>{
-    $('sellChoices').hidden=false;$('sellForms').hidden=true;
-  });
-  $('ticketForm')?.addEventListener('submit',e=>publish(e,'ticket'));
-  $('memForm')?.addEventListener('submit',e=>publish(e,'mem'));
-  $('contactForm')?.addEventListener('submit',beginContact);
-  $('messagesOpen')?.addEventListener('click',openMessages);
-  $('replyForm')?.addEventListener('submit',reply);
-  $('ts')?.addEventListener('input',renderTickets);
-  $('tf')?.addEventListener('change',renderTickets);
-  $('ms')?.addEventListener('input',renderMemorabilia);
-  $('mf')?.addEventListener('change',renderMemorabilia);
-  $('heroSearch')?.addEventListener('submit',e=>{
-    e.preventDefault();$('ts').value=$('heroQuery').value;showPage('tickets');
-  });
-  $('alertsSignIn')?.addEventListener('click',()=>{
-    authMode='signin';updateAuth();modal('authModal');
-  });
-  initialiseTeams();
-
-  document.addEventListener('click',e=>{
-    const c=e.target.closest('[data-open-type]');
-    if(c)openDetails(c.dataset.openType,c.dataset.openId);
-  });
-  document.addEventListener('keydown',e=>{
-    if(e.key==='Escape')document.querySelectorAll('.modal').forEach(m=>m.hidden=true);
-  });
-  $('lang')?.addEventListener('click',()=>{
-    const next=document.documentElement.lang==='en'?'he':'en';
-    document.documentElement.lang=next;
-    document.documentElement.dir=next==='he'?'rtl':'ltr';
-    document.querySelectorAll('[data-en][data-he]').forEach(el=>el.innerHTML=el.dataset[next]);
-    document.querySelectorAll('[data-en-placeholder][data-he-placeholder]').forEach(el=>
-      el.placeholder=el.dataset[next+'Placeholder']
+function renderTickets() {
+  $("app").innerHTML = `
+    <div class="page-heading"><span class="eyebrow">${tr("discover")}</span><h2>${tr("tickets")}</h2></div>
+    <div class="filters">
+      <input id="listingSearch" placeholder="${tr("searchListings")}">
+      <select id="sportFilter"><option value="">${tr("all")}</option><option>Football</option><option>Basketball</option></select>
+      <input id="countryFilter" placeholder="${tr("country")}">
+      <input id="minPrice" type="number" min="0" placeholder="Min €">
+      <input id="maxPrice" type="number" min="0" placeholder="Max €">
+      <select id="sortFilter"><option value="new">${tr("latestTickets")}</option><option value="low">Price ↑</option><option value="high">Price ↓</option></select>
+    </div>
+    <div id="ticketResults" class="card-grid"></div>`;
+  const update = () => {
+    let rows = [...ticketCache];
+    const q = $("listingSearch").value.toLowerCase();
+    const sport = $("sportFilter").value;
+    const country = $("countryFilter").value.toLowerCase();
+    const min = Number($("minPrice").value || 0);
+    const max = Number($("maxPrice").value || Infinity);
+    rows = rows.filter(r =>
+      `${r.event_name} ${r.country} ${r.description}`.toLowerCase().includes(q) &&
+      (!sport || r.sport === sport) &&
+      String(r.country || "").toLowerCase().includes(country) &&
+      Number(r.price) >= min && Number(r.price) <= max
     );
-    $('lang').textContent=next==='he'?'English':'עברית';
-  });
+    if ($("sortFilter").value === "low") rows.sort((a,b)=>a.price-b.price);
+    if ($("sortFilter").value === "high") rows.sort((a,b)=>b.price-a.price);
+    $("ticketResults").innerHTML = rows.map(r=>listingCard(r)).join("") || empty(tr("noTickets"));
+  };
+  ["listingSearch","sportFilter","countryFilter","minPrice","maxPrice","sortFilter"]
+    .forEach(id => $(id).addEventListener("input",update));
+  update();
+}
 
-  try{
-    if(!window.supabase?.createClient)
-      throw Error('Supabase did not load. Check your internet connection and refresh.');
-    db=window.supabase.createClient(SUPABASE_URL,SUPABASE_KEY,{
-      auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true}
-    });
-    const {data,error}=await db.auth.getSession();
-    if(error)throw error;
-    currentUser=data.session?.user||null;
-    updateAuth();
-    db.auth.onAuthStateChange((_event,session)=>{
-      currentUser=session?.user||null;updateAuth();
-    });
-    await loadTickets();
-    await loadMemorabilia();
-  }catch(err){
-    console.error(err);
-    say('ticketError',`Ticketly connection error: ${err.message}`,true);
-    say('memError',`Ticketly connection error: ${err.message}`,true);
+function renderMemorabilia() {
+  $("app").innerHTML = `
+    <div class="page-heading"><span class="eyebrow">${tr("collect")}</span><h2>${tr("memorabilia")}</h2></div>
+    <div class="filters"><input id="memSearch" placeholder="${tr("searchListings")}">
+    <select id="memSport"><option value="">${tr("all")}</option><option>Football</option><option>Basketball</option></select></div>
+    <div id="memResults" class="card-grid"></div>`;
+  const update = () => {
+    const q = $("memSearch").value.toLowerCase();
+    const sport = $("memSport").value;
+    const rows = memorabiliaCache.filter(r =>
+      `${r.title} ${r.description} ${r.country}`.toLowerCase().includes(q) &&
+      (!sport || r.sport === sport)
+    );
+    $("memResults").innerHTML = rows.map(r=>listingCard(r,"memorabilia")).join("") || empty(tr("noItems"));
+  };
+  $("memSearch").addEventListener("input",update);
+  $("memSport").addEventListener("change",update);
+  update();
+}
+
+function renderTeams() {
+  $("app").innerHTML = `
+    <div class="page-heading"><span class="eyebrow">${tr("followYourClub")}</span><h2>${tr("teams")}</h2></div>
+    <div class="team-filters">
+      <button class="${teamSport==="Football"?"active":""}" data-teamsport="Football">⚽ ${tr("football")}</button>
+      <button class="${teamSport==="Basketball"?"active":""}" data-teamsport="Basketball">🏀 ${tr("basketball")}</button>
+    </div>
+    <div class="team-grid">${teamCache.filter(t=>t.sport===teamSport).map(teamCard).join("") || empty(tr("noTeams"))}</div>`;
+}
+
+async function renderTeamDetail(team) {
+  selectedTeam = team;
+  const tickets = ticketCache.filter(t=>String(t.team_id)===String(team.id));
+  const items = memorabiliaCache.filter(t=>String(t.team_id)===String(team.id));
+  $("app").innerHTML = `
+    <div class="page-heading">${team.logo_url?`<img class="team-logo" src="${safe(team.logo_url)}">`:""}
+      <h2>${safe(team.name)}</h2><p>${safe(team.sport)} · ${safe(team.country || "")}</p>
+      <button class="secondary" data-page="teams">← ${tr("teams")}</button></div>
+    <h2>${tr("tickets")}</h2><div class="card-grid">${tickets.map(t=>listingCard(t)).join("") || empty(tr("noTickets"))}</div>
+    <h2>${tr("memorabilia")}</h2><div class="card-grid">${items.map(t=>listingCard(t,"memorabilia")).join("") || empty(tr("noItems"))}</div>`;
+}
+
+function renderCompetitions() {
+  $("app").innerHTML = `<div class="page-heading"><h2>${tr("competitionPage")}</h2></div>
+  <div class="card-grid">${empty(tr("noCompetitions"))}</div>`;
+}
+
+function renderSell() {
+  $("app").innerHTML = `
+  <div class="page-heading"><h2>${tr("chooseType")}</h2></div>
+  <div class="form-layout">
+    <form id="newTicket" class="panel">
+      <h3>${tr("sellTicket")}</h3>
+      ${field("event_name",tr("eventName"),"text",true)}
+      ${sportSelect()}
+      ${teamSelect()}
+      ${field("country",tr("country"),"text",true)}
+      ${field("event_date",tr("eventDate"),"date",true)}
+      ${field("price",tr("price")+" (€)","number",true)}
+      ${field("quantity",tr("quantity"),"number",true)}
+      ${field("section",tr("section"),"text",false)}
+      ${field("description",tr("description"),"textarea",false)}
+      ${field("image",tr("image"),"file",false)}
+      <button class="primary full">${tr("publish")}</button><p id="ticketMessage" class="form-message"></p>
+    </form>
+    <form id="newMemorabilia" class="panel">
+      <h3>${tr("sellItem")}</h3>
+      ${field("title",tr("title"),"text",true)}
+      ${sportSelect()}
+      ${teamSelect()}
+      ${field("country",tr("country"),"text",true)}
+      ${field("price",tr("price")+" (€)","number",true)}
+      ${field("description",tr("description"),"textarea",false)}
+      ${field("image",tr("image"),"file",false)}
+      <button class="primary full">${tr("publish")}</button><p id="memMessage" class="form-message"></p>
+    </form>
+  </div>`;
+  $("newTicket").addEventListener("submit",e=>publishListing(e,"ticket"));
+  $("newMemorabilia").addEventListener("submit",e=>publishListing(e,"memorabilia"));
+}
+
+function field(name,label,type,required) {
+  const req = required ? "required" : "";
+  if (type==="textarea") return `<label>${label}<textarea name="${name}" maxlength="2000"></textarea></label>`;
+  return `<label>${label}<input name="${name}" type="${type}" ${req} ${type==="number"?'min="0.01" step="0.01"':""}></label>`;
+}
+function sportSelect() {
+  return `<label>${tr("sport")}<select name="sport" required><option>Football</option><option>Basketball</option></select></label>`;
+}
+function teamSelect() {
+  return `<label>${tr("team")}<select name="team_id"><option value="">${tr("teamOptional")}</option>
+    ${teamCache.map(t=>`<option value="${safe(t.id)}">${safe(t.name)}</option>`).join("")}</select></label>`;
+}
+
+async function uploadImage(file) {
+  if (!file) return null;
+  if (!file.type.startsWith("image/") || file.size > 5*1024*1024) {
+    throw new Error("Please choose an image smaller than 5 MB.");
   }
+  const ext = file.name.split(".").pop().toLowerCase().replace(/[^a-z0-9]/g,"");
+  const path = `${user.id}/${crypto.randomUUID()}.${ext || "jpg"}`;
+  const {error} = await db.storage.from("ticket-photos").upload(path,file,{upsert:false});
+  if (error) throw error;
+  const {data} = db.storage.from("ticket-photos").getPublicUrl(path);
+  return data.publicUrl;
+}
+
+async function publishListing(event,type) {
+  event.preventDefault();
+  if (!user) return showAuth();
+  const form = event.currentTarget;
+  const values = Object.fromEntries(new FormData(form).entries());
+  const message = $(type==="ticket"?"ticketMessage":"memMessage");
+  const button = form.querySelector("button[type=submit],button:not([type])");
+  button.disabled = true;
+  try {
+    const image = await uploadImage(values.image);
+    const common = {
+      sport:values.sport,
+      team_id:values.team_id || null,
+      country:values.country,
+      price:Number(values.price),
+      description:values.description || "",
+      image_url:image,
+      user_id:user.id
+    };
+    let payload;
+    if (type==="ticket") {
+      payload = {...common,event_name:values.event_name,event_date:values.event_date,
+        quantity:Number(values.quantity),section:values.section || "",status:"available"};
+    } else {
+      payload = {...common,title:values.title,category:"Sports memorabilia"};
+    }
+    const {error} = await db.from(type==="ticket"?"tickets":"memorabilia").insert(payload);
+    if (error) throw error;
+    form.reset();
+    message.textContent = tr("success");
+    await refreshData();
+  } catch (error) {
+    message.textContent = error.message;
+  } finally { button.disabled = false; }
+}
+
+function renderAlerts() {
+  $("app").innerHTML = `<div class="page-heading"><h2>${tr("following")}</h2></div><div id="followedTeams" class="team-grid"></div>`;
+  if (!user) return $("followedTeams").innerHTML=empty(tr("loginRequired"));
+  db.from("followed_teams").select("team_id,teams(*)").eq("user_id",user.id)
+    .then(({data,error})=>{
+      $("followedTeams").innerHTML = error ? empty(error.message) :
+        (data||[]).map(x=>teamCard(x.teams)).join("") || empty(tr("noFollowing"));
+    });
+}
+
+async function renderProfile() {
+  $("app").innerHTML = `<div class="page-heading"><h2>${tr("profileTitle")}</h2></div>`;
+  if (!user) return $("app").insertAdjacentHTML("beforeend",`<button class="primary" id="profileLogin">${tr("signIn")}</button>`);
+  const {data:p} = await db.from("profiles").select("*").eq("user_id",user.id).maybeSingle();
+  const {count} = await db.from("tickets").select("*",{count:"exact",head:true}).eq("user_id",user.id);
+  $("app").insertAdjacentHTML("beforeend",`
+    <form id="profileForm" class="panel">
+      <label>${tr("name")}<input name="display_name" maxlength="60" value="${safe(p?.display_name || "")}" required></label>
+      <label>${tr("profilePicture")}<input name="avatar" type="file" accept="image/*"></label>
+      <p>${tr("joined")}: ${p?.created_at?new Date(p.created_at).toLocaleDateString():"—"}</p>
+      <p>${tr("sold")}: ${Number(p?.tickets_sold||0)}</p>
+      <p>${tr("listed")}: ${count||0}</p>
+      <button class="primary">${tr("save")}</button>
+      <button type="button" id="profileSignOut" class="secondary">${tr("signOut")}</button>
+      <p id="profileMessage" class="form-message"></p>
+    </form>`);
+  $("profileForm").addEventListener("submit",async e=>{
+    e.preventDefault();
+    const f=new FormData(e.currentTarget);
+    try {
+      const avatar=await uploadImage(f.get("avatar"));
+      const patch={user_id:user.id,display_name:f.get("display_name")};
+      if(avatar) patch.avatar_url=avatar;
+      const {error}=await db.from("profiles").upsert(patch,{onConflict:"user_id"});
+      if(error) throw error;
+      $("profileMessage").textContent=tr("success");
+      await refreshData();
+    } catch(err){$("profileMessage").textContent=err.message;}
+  });
+  $("profileSignOut").addEventListener("click",signOut);
+}
+
+function renderMessages() {
+  $("app").innerHTML = `<div class="page-heading"><h2>${tr("messages")}</h2></div>
+    <div class="panel"><div id="pageConversations"></div><div id="pageChat"></div></div>`;
+  if (!user) return $("pageConversations").innerHTML=empty(tr("loginRequired"));
+  loadConversations("pageConversations","pageChat");
+}
+
+async function loadConversations(listId,chatId) {
+  const {data,error}=await db.from("conversations").select("*,messages(*)")
+    .contains("participant_ids",[user.id]).order("updated_at",{ascending:false});
+  if(error) return $(listId).innerHTML=empty(error.message);
+  conversationCache=data||[];
+  $(listId).innerHTML=conversationCache.map(c=>
+    `<button class="secondary full" data-conversation="${c.id}">Conversation · ${new Date(c.updated_at).toLocaleString()}</button>`
+  ).join("") || empty(tr("noMessages"));
+}
+
+async function openConversation(id) {
+  selectedConversation=id;
+  const {data,error}=await db.from("messages").select("*")
+    .eq("conversation_id",id).order("created_at");
+  if(error) return showNotice(error.message,true);
+  $("chatMessages").innerHTML=(data||[]).map(m=>
+    `<div class="message-bubble ${m.sender_id===user.id?"mine":""}">${safe(m.body)}</div>`
+  ).join("");
+  $("chatMessages").scrollTop=$("chatMessages").scrollHeight;
+}
+
+async function sendMessage(event) {
+  event.preventDefault();
+  if(!user || !selectedConversation) return;
+  const body=$("messageInput").value.trim();
+  if(!body) return;
+  const {error}=await db.from("messages").insert({
+    conversation_id:selectedConversation,sender_id:user.id,body
+  });
+  if(error) return $("chatNotice").textContent=error.message;
+  $("messageInput").value="";
+  await openConversation(selectedConversation);
+}
+
+async function contactSeller(row,type) {
+  if(!user) return showAuth();
+  if(row.user_id===user.id) return showNotice("This is your own listing.");
+  const table=type==="ticket"?"conversations":"mem_conversations";
+  const idField=type==="ticket"?"ticket_id":"item_id";
+  const {data:existing}=await db.from(table).select("*")
+    .contains("participant_ids",[user.id]).eq(idField,row.id).maybeSingle();
+  let conversation=existing;
+  if(!conversation) {
+    const {data,error}=await db.from(table).insert({
+      participant_ids:[user.id,row.user_id],[idField]:row.id
+    }).select().single();
+    if(error) return showNotice(error.message,true);
+    conversation=data;
+  }
+  selectedConversation=conversation.id;
+  openModal("chatModal");
+  $("conversationList").innerHTML="";
+  await openConversation(selectedConversation);
+}
+
+async function showDetails(id,type) {
+  const row=(type==="ticket"?ticketCache:memorabiliaCache).find(x=>String(x.id)===String(id));
+  if(!row) return;
+  const title=type==="ticket"?row.event_name:row.title;
+  $("detailContent").innerHTML=`
+    ${row.image_url?`<img class="listing-image" src="${safe(row.image_url)}">`:""}
+    <h2>${safe(title)}</h2><p>${safe(row.sport||"")} · ${safe(row.country||"")}</p>
+    <p>${safe(row.description||"")}</p><h2 class="price">${money(row.price)}</h2>
+    <div class="seller"><strong>${safe(row.seller?.display_name||"Ticketly member")}</strong></div>
+    <p>${tr("joined")}: ${row.seller?.created_at?new Date(row.seller.created_at).toLocaleDateString():"—"}</p>
+    <p>${tr("sold")}: ${Number(row.seller?.tickets_sold||0)}</p>
+    <button id="detailContact" class="primary">${tr("contact")}</button>`;
+  openModal("detailModal");
+  $("detailContact").addEventListener("click",()=>contactSeller(row,type));
+}
+
+async function showAuth() {
+  authMode="signin";
+  $("authHeading").textContent=tr("signIn");
+  $("authSubmit").textContent=tr("signIn");
+  $("authSwitch").textContent=tr("needAccount");
+  $("signOutButton").hidden=!user;
+  openModal("authModal");
+}
+
+async function submitAuth(e) {
+  e.preventDefault();
+  const email=$("authEmail").value.trim();
+  const password=$("authPassword").value;
+  $("authSubmit").disabled=true;
+  try {
+    const result=authMode==="signup"
+      ? await db.auth.signUp({email,password})
+      : await db.auth.signInWithPassword({email,password});
+    if(result.error) throw result.error;
+    if(authMode==="signup" && !result.data.session) {
+      $("authMessage").textContent="Account created. Check your email to confirm it.";
+    } else {
+      user=result.data.user;
+      closeModal("authModal");
+      await ensureProfile();
+      await refreshData();
+    }
+  } catch(err) {$("authMessage").textContent=err.message;}
+  finally {$("authSubmit").disabled=false;}
+}
+
+async function ensureProfile() {
+  if(!user) return;
+  const {error}=await db.from("profiles").upsert({
+    user_id:user.id,
+    display_name:user.user_metadata?.display_name || user.email?.split("@")[0] || "Member"
+  },{onConflict:"user_id",ignoreDuplicates:true});
+  if(error) console.warn("Profile setup:",error.message);
+}
+
+async function signOut() {
+  const {error}=await db.auth.signOut();
+  if(error) return showNotice(error.message,true);
+  user=null;
+  closeModal("authModal");
+  await refreshData();
+}
+
+async function toggleFollow(teamId) {
+  if(!user) return showAuth();
+  const {data}=await db.from("followed_teams").select("*")
+    .eq("user_id",user.id).eq("team_id",teamId).maybeSingle();
+  if(data) {
+    const {error}=await db.from("followed_teams").delete()
+      .eq("user_id",user.id).eq("team_id",teamId);
+    if(error) return showNotice(error.message,true);
+    showNotice(tr("unfollow"));
+  } else {
+    const {error}=await db.from("followed_teams").insert({user_id:user.id,team_id:teamId});
+    if(error) return showNotice(error.message,true);
+    showNotice(tr("follow"));
+  }
+}
+
+async function refreshData() {
+  try {
+    await Promise.all([loadTickets(),loadMemorabilia(),loadTeams()]);
+    renderPage();
+  } catch(error) {
+    console.error(error);
+    showNotice("Database error: "+error.message,true);
+  }
+}
+
+function renderPage() {
+  if(page==="home") renderHome();
+  else if(page==="tickets") renderTickets();
+  else if(page==="memorabilia") renderMemorabilia();
+  else if(page==="teams") renderTeams();
+  else if(page==="competitions") renderCompetitions();
+  else if(page==="sell") renderSell();
+  else if(page==="alerts") renderAlerts();
+  else if(page==="profile") renderProfile();
+  else if(page==="messages") renderMessages();
+}
+
+document.addEventListener("click",e=>{
+  const nav=e.target.closest("[data-page]");
+  if(nav) {go(nav.dataset.page);return;}
+  const sport=e.target.closest("[data-sport]");
+  if(sport) {page="tickets";renderTickets();$("sportFilter").value=sport.dataset.sport;$("sportFilter").dispatchEvent(new Event("input"));return;}
+  const teamSportButton=e.target.closest("[data-teamsport]");
+  if(teamSportButton) {teamSport=teamSportButton.dataset.teamsport;renderTeams();return;}
+  const team=e.target.closest("[data-team]");
+  if(team) {
+    const found=teamCache.find(t=>String(t.id)===team.dataset.team);
+    if(found) renderTeamDetail(found);
+    return;
+  }
+  const card=e.target.closest("[data-detail]");
+  if(card) {showDetails(card.dataset.detail,card.dataset.type);return;}
+  const conversation=e.target.closest("[data-conversation]");
+  if(conversation) {openConversation(conversation.dataset.conversation);return;}
+  const close=e.target.closest("[data-close]");
+  if(close) closeModal(close.dataset.close);
 });
+
+$("languageButton").addEventListener("click",()=>{
+  language=language==="en"?"he":"en";
+  applyLanguage();
+});
+$("accountButton").addEventListener("click",showAuth);
+$("mobileMenu").addEventListener("click",()=>$("navigation").classList.toggle("open"));
+$("authForm").addEventListener("submit",submitAuth);
+$("authSwitch").addEventListener("click",()=>{
+  authMode=authMode==="signin"?"signup":"signin";
+  $("authHeading").textContent=tr(authMode==="signup"?"createAccount":"signIn");
+  $("authSubmit").textContent=tr(authMode==="signup"?"createAccount":"signIn");
+  $("authSwitch").textContent=tr(authMode==="signup"?"alreadyAccount":"needAccount");
+});
+$("signOutButton").addEventListener("click",signOut);
+$("messageForm").addEventListener("submit",sendMessage);
+$("forgotPassword").addEventListener("click",async()=>{
+  const email=$("authEmail").value.trim();
+  if(!email) return $("authMessage").textContent="Enter your email first.";
+  const {error}=await db.auth.resetPasswordForEmail(email);
+  $("authMessage").textContent=error?error.message:"Password reset email requested.";
+});
+$("heroSearch").addEventListener("submit",e=>{
+  e.preventDefault();
+  page="tickets";
+  renderTickets();
+  $("listingSearch").value=$("heroQuery").value;
+  $("listingSearch").dispatchEvent(new Event("input"));
+});
+
+(async function init(){
+  applyLanguage();
+  try {
+    const {data,error}=await db.auth.getSession();
+    if(error) throw error;
+    user=data.session?.user||null;
+    if(user) await ensureProfile();
+    $("accountButton").textContent=user?(user.email||tr("profile")):tr("signIn");
+    db.auth.onAuthStateChange((_event,session)=>{
+      user=session?.user||null;
+      $("accountButton").textContent=user?(user.email||tr("profile")):tr("signIn");
+      refreshData();
+    });
+    await refreshData();
+  } catch(error) {
+    console.error(error);
+    showNotice("Ticketly could not connect to Supabase: "+error.message,true);
+  }
+})();
