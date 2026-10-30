@@ -1,298 +1,109 @@
-
 <!doctype html>
 <html lang="en" dir="ltr">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="theme-color" content="#176b53">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>Ticketly — The World, Live</title>
   <link rel="stylesheet" href="style.css">
-
-  <!-- Load Supabase before Ticketly -->
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-  <script>
-    window.ticketlySupabaseReady = new Promise((resolve, reject) => {
-      if (window.supabase && window.supabase.createClient) {
-        resolve(window.supabase);
-        return;
-      }
-
-      const fallback = document.createElement("script");
-      fallback.src = "https://unpkg.com/@supabase/supabase-js@2/dist/umd/supabase.min.js";
-      fallback.onload = () => {
-        if (window.supabase && window.supabase.createClient) {
-          resolve(window.supabase);
-        } else {
-          reject(new Error("Supabase could not be loaded."));
-        }
-      };
-      fallback.onerror = () => reject(new Error("Could not load Supabase. Check your internet connection."));
-      document.head.appendChild(fallback);
-    });
-  </script>
-
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script defer src="script.js"></script>
 </head>
 <body>
-  <header class="topbar">
-    <a class="brand" href="#" data-page="home">
-      <span class="brand-icon">✳</span>
-      TICKETLY<span class="orange">.</span>
-    </a>
-
-    <nav aria-label="Main navigation">
-      <button class="active" data-page="home">⌂ <span data-en="Home" data-he="בית">Home</span></button>
-      <button data-page="tickets">◎ <span data-en="Explore" data-he="גילוי">Explore</span></button>
-      <button data-page="memorabilia">★ <span data-en="Memorabilia" data-he="מזכרות">Memorabilia</span></button>
-      <button data-page="sell">＋ <span data-en="Sell" data-he="מכירה">Sell</span></button>
-      <button data-page="alerts">♧ <span data-en="My Alerts" data-he="ההתראות שלי">My Alerts</span></button>
-      <button id="messagesOpen">☏ <span data-en="Messages" data-he="הודעות">Messages</span></button>
-      <button id="openAuth"><span data-en="Profile / Sign in" data-he="פרופיל / כניסה">Profile / Sign in</span></button>
-      <button id="signOut" hidden data-en="Sign out" data-he="התנתקות">Sign out</button>
-    </nav>
-
-    <button id="lang" class="language" type="button">עברית</button>
-  </header>
-
-  <main>
-    <section class="hero" id="home">
-      <div class="hero-copy">
-        <div class="eyebrow"><span></span><span data-en="THE WORLD, LIVE" data-he="העולם, בשידור חי">THE WORLD, LIVE</span></div>
-        <h1>
-          <span data-en="Be there" data-he="תהיו שם">Be there</span><br>
-          <span data-en="when " data-he="כשהרגע ">when </span><span class="green" data-en="it" data-he="הוא">it</span><br>
-          <span class="green" data-en="happens." data-he="מתרחש.">happens.</span>
-        </h1>
-        <p data-en="The big matches. The unforgettable moments. Find your place in the crowd."
-           data-he="המשחקים הגדולים. הרגעים הבלתי נשכחים. מצאו את המקום שלכם בקהל.">
-          The big matches. The unforgettable moments. Find your place in the crowd.
-        </p>
-        <form id="heroSearch" class="searchbar">
-          <span class="search-icon">⌕</span>
-          <input id="heroQuery" placeholder="Team, event or country"
-            data-en-placeholder="Team, event or country"
-            data-he-placeholder="קבוצה, אירוע או מדינה">
-          <button type="submit" class="primary"
-            data-en="Find tickets →" data-he="מצאו כרטיסים ←">Find tickets →</button>
-        </form>
-        <div class="trust">
-          <span>♧</span>
-          <span data-en="A marketplace made for sports fans"
-            data-he="שוק לאוהדי ספורט">A marketplace made for sports fans</span>
-        </div>
-      </div>
-
-      <div class="poster-area">
-        <article class="poster poster-green">
-          <small>FOOTBALL · WORLDWIDE</small>
-          <div class="poster-circle"></div>
-          <div class="poster-content">
-            <span class="trophy">♜</span>
-            <strong data-en="MATCH<br>DAY." data-he="יום<br>המשחק.">MATCH<br>DAY.</strong>
-          </div>
-          <small class="poster-bottom" data-en="FEEL EVERY SECOND." data-he="הרגישו כל שנייה.">FEEL EVERY SECOND.</small>
-        </article>
-        <article class="poster poster-orange">
-          <small>TICKETLY / 01</small>
-          <div class="poster-circle"></div>
-          <div class="poster-content">
-            <strong><span data-en="YOUR NEXT" data-he="המשחק">YOUR NEXT</span><br>
-              <span class="light" data-en="moment." data-he="הבא שלכם.">moment.</span>
-            </strong>
-          </div>
-          <div class="stamp" data-en="LIVE<br>IT LOUD" data-he="לחיות<br>בעוצמה">LIVE<br>IT LOUD</div>
-          <small class="poster-bottom" data-en="FIND YOUR SEAT →" data-he="מצאו את המקום שלכם ←">FIND YOUR SEAT →</small>
-        </article>
-        <div class="poster-caption">
-          <span data-en="For the love<br>of the game." data-he="באהבה<br>למשחק.">For the love<br>of the game.</span>
-          <span class="worldwide">01 — 04<br>WORLDWIDE</span>
-        </div>
-      </div>
-    </section>
-
-    <section class="ticker" id="ticker">
-      <span>FOOTBALL</span> ✳ <span>BASKETBALL</span> ✳
-      <span>TENNIS</span> ✳ <span>MEMORABILIA</span> ✳
-      <span>FOOTBALL</span> ✳ <span>SPORTS</span>
-    </section>
-
-    <section id="tickets" class="market-section" hidden>
-      <div class="section-heading">
-        <div>
-          <div class="eyebrow"><span></span><span data-en="YOUR NEXT EXPERIENCE" data-he="החוויה הבאה שלכם">YOUR NEXT EXPERIENCE</span></div>
-          <h2 data-en="Find your <span class='green'>moment.</span>" data-he="מצאו את <span class='green'>הרגע שלכם.</span>">Find your <span class="green">moment.</span></h2>
-          <p data-en="Explore sports tickets listed by fans." data-he="גלו כרטיסי ספורט שמפורסמים על ידי אוהדים.">Explore sports tickets listed by fans.</p>
-        </div>
-      </div>
-      <div class="filters">
-        <input id="ts" placeholder="Search teams, events or countries..."
-          data-en-placeholder="Search teams, events or countries..."
-          data-he-placeholder="חיפוש קבוצות, אירועים או מדינות...">
-        <select id="tf" aria-label="Filter tickets">
-          <option value="All">All sports</option>
-          <option value="Football">Football</option>
-          <option value="Basketball">Basketball</option>
-          <option value="Tennis">Tennis</option>
-          <option value="Other">Other sports</option>
-        </select>
-      </div>
-      <div id="ticketGrid" class="grid"></div>
-      <p id="ticketError" class="error" role="status"></p>
-    </section>
-
-    <section id="memorabilia" class="market-section memorabilia-section" hidden>
-      <div class="eyebrow"><span></span><span data-en="OWN A PIECE OF THE GAME" data-he="קחו חלק מהמשחק הביתה">OWN A PIECE OF THE GAME</span></div>
-      <h2 data-en="More than a <span class='green'>memory.</span>" data-he="יותר מ<span class='green'>מזכרת.</span>">More than a <span class="green">memory.</span></h2>
-      <p data-en="Discover signed shirts, match-worn shirts, boots and collectibles."
-         data-he="גלו חולצות חתומות, חולצות ממשחקים, נעליים ופריטי אספנות.">Discover signed shirts, match-worn shirts, boots and collectibles.</p>
-      <div class="filters">
-        <input id="ms" placeholder="Search memorabilia..."
-          data-en-placeholder="Search memorabilia..."
-          data-he-placeholder="חיפוש מזכרות...">
-        <select id="mf" aria-label="Filter memorabilia">
-          <option value="All">All items</option>
-          <option value="Match-worn shirt">Match-worn shirt</option>
-          <option value="Signed item">Signed item</option>
-          <option value="Boots">Boots</option>
-          <option value="Other">Other</option>
-        </select>
-      </div>
-      <div id="memGrid" class="grid"></div>
-      <p id="memError" class="error" role="status"></p>
-    </section>
-
-    <section id="sell" class="sell-section" hidden>
-      <div class="eyebrow"><span></span><span data-en="SELL TO FELLOW FANS" data-he="מכרו לאוהדים אחרים">SELL TO FELLOW FANS</span></div>
-      <h2 data-en="What would you like <span class='green'>to sell?</span>" data-he="מה תרצו <span class='green'>למכור?</span>">What would you like <span class="green">to sell?</span></h2>
-      <p data-en="Choose what you want to list." data-he="בחרו מה תרצו לפרסם.">Choose what you want to list.</p>
-
-      <div class="sell-choices" id="sellChoices">
-        <button class="choice-card" id="chooseTicket" type="button">
-          <span>⚽</span><h3 data-en="Sell Tickets" data-he="מכירת כרטיסים">Sell Tickets</h3>
-          <p data-en="List football, basketball, tennis and other sports tickets." data-he="פרסמו כרטיסי כדורגל, כדורסל, טניס וספורט נוסף.">List football, basketball, tennis and other sports tickets.</p>
-          <b data-en="Continue →" data-he="המשך ←">Continue →</b>
-        </button>
-        <button class="choice-card" id="chooseMem" type="button">
-          <span>★</span><h3 data-en="Sell Memorabilia" data-he="מכירת מזכרות">Sell Memorabilia</h3>
-          <p data-en="List signed shirts, match-worn gear, boots and collectibles." data-he="פרסמו חולצות חתומות, ציוד ממשחקים, נעליים ופריטי אספנות.">List signed shirts, match-worn gear, boots and collectibles.</p>
-          <b data-en="Continue →" data-he="המשך ←">Continue →</b>
-        </button>
-      </div>
-
-      <div class="forms" id="sellForms" hidden>
-        <button class="text-button" type="button" id="backSell" data-en="← Back to choices" data-he="חזרה לבחירה ←">← Back to choices</button>
-        <form id="ticketForm" class="panel" hidden>
-          <h3 data-en="Sell a ticket" data-he="מכירת כרטיס">Sell a ticket</h3>
-          <label><span data-en="Event name" data-he="שם האירוע">Event name</span><input id="eventName" required maxlength="120"></label>
-          <div class="two">
-            <label><span data-en="Sport" data-he="ספורט">Sport</span><select id="eventCategory"><option>Football</option><option>Basketball</option><option>Tennis</option><option>Other</option></select></label>
-            <label><span data-en="Country / location" data-he="מדינה / מיקום">Country / location</span><input id="eventCountry" required maxlength="100"></label>
-          </div>
-          <div class="two">
-            <label><span data-en="Event date" data-he="תאריך האירוע">Event date</span><input id="eventDate" type="date" required></label>
-            <label><span data-en="Price (€)" data-he="מחיר (€)">Price (€)</span><input id="ticketPrice" type="number" min="0.01" step="0.01" required></label>
-          </div>
-          <label><span data-en="Description" data-he="תיאור">Description</span><textarea id="ticketDescription" maxlength="1000"></textarea></label>
-          <label><span data-en="Photo (optional)" data-he="תמונה (לא חובה)">Photo (optional)</span><input id="ticketPhoto" type="file" accept="image/*"></label>
-          <button class="primary full" id="ticketSubmit" type="submit" data-en="Publish ticket" data-he="פרסום כרטיס">Publish ticket</button>
-          <p id="ticketMsg" role="status"></p>
-        </form>
-
-        <form id="memForm" class="panel" hidden>
-          <h3 data-en="Sell memorabilia" data-he="מכירת מזכרות">Sell memorabilia</h3>
-          <label><span data-en="Item title" data-he="שם הפריט">Item title</span><input id="memTitle" required maxlength="120"></label>
-          <div class="two">
-            <label><span data-en="Item type" data-he="סוג הפריט">Item type</span><select id="memCategory"><option>Match-worn shirt</option><option>Signed item</option><option>Boots</option><option>Other</option></select></label>
-            <label><span data-en="Country / location" data-he="מדינה / מיקום">Country / location</span><input id="memCountry" required maxlength="100"></label>
-          </div>
-          <label><span data-en="Price (€)" data-he="מחיר (€)">Price (€)</span><input id="memPrice" type="number" min="0.01" step="0.01" required></label>
-          <label><span data-en="Description" data-he="תיאור">Description</span><textarea id="memDescription" maxlength="1000"></textarea></label>
-          <label><span data-en="Photo (optional)" data-he="תמונה (לא חובה)">Photo (optional)</span><input id="memPhoto" type="file" accept="image/*"></label>
-          <button class="primary full" id="memSubmit" type="submit" data-en="Publish item" data-he="פרסום פריט">Publish item</button>
-          <p id="memMsg" role="status"></p>
-        </form>
-      </div>
-    </section>
-
-    <section id="alerts" class="alerts-section" hidden>
-      <div>
-        <div class="eyebrow"><span></span><span data-en="DON'T MISS YOUR TEAM" data-he="אל תפספסו את הקבוצה שלכם">DON'T MISS YOUR TEAM</span></div>
-        <h2 data-en="Your team. Your <span class='green'>alerts.</span>" data-he="הקבוצה שלכם. <span class='green'>ההתראות שלכם.</span>">Your team. Your <span class="green">alerts.</span></h2>
-        <p data-en="Choose the teams you want to follow. Email alerts can be added when email delivery is configured." data-he="בחרו את הקבוצות שתרצו לעקוב אחריהן. ניתן להוסיף התראות בדוא״ל לאחר הגדרת שליחת הודעות.">Choose the teams you want to follow. Email alerts can be added when email delivery is configured.</p>
-        <form id="alertsForm" class="panel">
-          <label><span data-en="Email address" data-he="כתובת דוא״ל">Email address</span><input id="alertEmail" type="email" placeholder="you@example.com" required></label>
-          <div class="team-options">
-            <label><input type="checkbox" name="teams" value="Arsenal"> Arsenal</label>
-            <label><input type="checkbox" name="teams" value="Chelsea"> Chelsea</label>
-            <label><input type="checkbox" name="teams" value="Liverpool"> Liverpool</label>
-            <label><input type="checkbox" name="teams" value="Manchester United"> Manchester United</label>
-            <label><input type="checkbox" name="teams" value="Manchester City"> Manchester City</label>
-            <label><input type="checkbox" name="teams" value="Real Madrid"> Real Madrid</label>
-            <label><input type="checkbox" name="teams" value="Barcelona"> Barcelona</label>
-            <label><input type="checkbox" name="teams" value="Other"> Other</label>
-          </div>
-          <button class="primary" type="submit" data-en="Save my teams" data-he="שמירת הקבוצות">Save my teams</button>
-          <p id="alertsMsg" role="status"></p>
-        </form>
-      </div>
-      <div class="alert-symbol">↗</div>
-    </section>
-  </main>
-
-  <footer>
-    <a class="brand" href="#" data-page="home">TICKETLY<span class="orange">.</span></a>
-    <span data-en="Made for sports fans, everywhere." data-he="נוצר עבור אוהדי ספורט, בכל מקום.">Made for sports fans, everywhere.</span>
-  </footer>
-
-  <div class="modal" id="authModal" hidden>
-    <div class="dialog">
-      <button class="x" type="button" data-close="authModal">×</button>
-      <h2 id="authTitle">Sign in</h2>
-      <form id="authForm">
-        <label><span data-en="Email" data-he="אימייל">Email</span><input id="email" type="email" autocomplete="email" required></label>
-        <label><span data-en="Password" data-he="סיסמה">Password</span><input id="password" type="password" minlength="6" autocomplete="current-password" required></label>
-        <button class="primary full" id="authSubmit" type="submit">Sign in</button>
+<header class="topbar">
+  <a class="brand" href="#"><span class="brand-icon">✳</span>TICKETLY<span class="orange">.</span></a>
+  <nav>
+    <button class="active" data-page="home">⌂ Home</button>
+    <button data-page="tickets">◎ Explore</button>
+    <button data-page="teamHub">⚽ Team Hub</button>
+    <button data-page="reviews">★ Reviews</button>
+    <button data-page="sell">＋ Sell</button>
+    <button data-page="memorabilia">★ Memorabilia</button>
+    <button data-page="alerts">♧ My Alerts</button>
+    <button id="messagesOpen">☏ Messages</button>
+    <button id="openAuth">Profile</button>
+    <button id="signOut" hidden>Sign out</button>
+  </nav>
+  <button id="lang" class="language">עברית</button>
+</header>
+<main>
+  <section class="hero" id="home">
+    <div class="hero-copy">
+      <div class="eyebrow"><span></span>THE WORLD, LIVE</div>
+      <h1>Be there<br>when <span class="green">it</span><br><span class="green">happens.</span></h1>
+      <p>The big nights. The once-in-a-lifetime days. Find your place in the crowd, wherever it is.</p>
+      <form id="heroSearch" class="searchbar">
+        <span class="search-icon">⌕</span>
+        <input id="heroQuery" placeholder="Artist, team, venue or city">
+        <button type="submit" class="primary">Find tickets →</button>
       </form>
-      <button id="switchAuth" class="text-button" type="button">Need an account? Sign up</button>
-      <p id="authMsg" role="status"></p>
+      <div class="trust">♧ Independent listings from around the world</div>
     </div>
-  </div>
-
-  <div class="modal" id="contactModal" hidden>
-    <div class="dialog">
-      <button class="x" type="button" data-close="contactModal">×</button>
-      <h2 id="contactTitle">Message seller</h2>
-      <form id="contactForm">
-        <label for="firstMessage">Message</label>
-        <textarea id="firstMessage" required maxlength="2000" placeholder="Write a message"></textarea>
-        <button class="primary full" type="submit">Send message</button>
+    <div class="poster-area">
+      <article class="poster poster-green"><small>LONDON · 15 MAY 2027</small><div class="poster-circle"></div><div class="poster-content"><span class="trophy">♜</span><strong>NORTH<br>LONDON.</strong></div><small class="poster-bottom">THE CITY IS YOURS.</small></article>
+      <article class="poster poster-orange"><small>M. / 01</small><div class="poster-circle"></div><div class="poster-content"><strong>YOUR NEXT<br><span class="light">story.</span></strong></div><div class="stamp">LIVE<br>IT LOUD</div><small class="poster-bottom">FIND IT HERE →</small></article>
+      <div class="poster-caption"><span>Where the world<br>comes to show up.</span><span class="worldwide">01 — 04<br>WORLDWIDE</span></div>
+    </div>
+  </section>
+  <section class="ticker" id="ticker">FOOTBALL ✳ LIVE MUSIC ✳ THEATRE ✳ MEMORABILIA ✳ FOOTBALL ✳ LIVE MUSIC</section>
+  <section id="tickets" class="market-section" hidden>
+    <div class="eyebrow"><span></span>YOUR NEXT EXPERIENCE</div>
+    <h2>Find your <span class="green">moment.</span></h2>
+    <p>From match day to the front row.</p>
+    <div class="filters"><input id="ts" placeholder="Search events..."><select id="tf"><option>All</option><option>Football</option><option>Basketball</option><option>Tennis</option><option>Other</option></select></div>
+    <div id="ticketGrid" class="grid"></div><p id="ticketError" class="error"></p>
+  </section>
+  <section id="memorabilia" class="market-section memorabilia-section" hidden>
+    <div class="eyebrow"><span></span>OWN A PIECE OF THE GAME</div><h2>More than a <span class="green">memory.</span></h2>
+    <p>Discover signed shirts, match-worn gear and collectibles.</p>
+    <div class="filters"><input id="ms" placeholder="Search memorabilia..."><select id="mf"><option>All</option><option>Match-worn shirt</option><option>Signed item</option><option>Boots</option><option>Other</option></select></div>
+    <div id="memGrid" class="grid"></div><p id="memError" class="error"></p>
+  </section>
+  <section id="sell" class="sell-section" hidden>
+    <div class="eyebrow"><span></span>YOUR TICKETS. YOUR STORY.</div><h2>Have something <span class="green">to share?</span></h2><p>List tickets or memorabilia for fellow fans.</p>
+    <div class="sell-choices" id="sellChoices">
+      <button class="choice-card" id="chooseTicket"><span>⚽</span><h3>Sell Tickets</h3><p>List a ticket for a football, basketball or tennis event.</p><b>Continue →</b></button>
+      <button class="choice-card" id="chooseMem"><span>★</span><h3>Sell Memorabilia</h3><p>List signed shirts, match-worn gear, boots and collectibles.</p><b>Continue →</b></button>
+    </div>
+    <div class="forms" id="sellForms" hidden>
+      <button class="text-button" type="button" id="backSell">← Back to choices</button>
+      <form id="ticketForm" class="panel">
+        <h3>Sell a ticket</h3>
+        <label>Event name<input id="eventName" required maxlength="120"></label>
+        <div class="two"><label>Category<select id="eventCategory"><option>Football</option><option>Basketball</option><option>Tennis</option><option>Other</option></select></label><label>Country<input id="eventCountry" required></label></div>
+        <div class="two"><label>Event date<input id="eventDate" type="date" required></label><label>Price (€)<input id="ticketPrice" type="number" min=".01" step=".01" required></label></div>
+        <label>Description<textarea id="ticketDescription" maxlength="1000"></textarea></label>
+        <label>Photo<input id="ticketPhoto" type="file" accept="image/*"></label>
+        <button class="primary full" id="ticketSubmit">Publish ticket</button><p id="ticketMsg"></p>
       </form>
-      <p id="contactMsg" role="status"></p>
+      <form id="memForm" class="panel">
+        <h3>Sell memorabilia</h3>
+        <label>Item title<input id="memTitle" required maxlength="120"></label>
+        <div class="two"><label>Item type<select id="memCategory"><option>Match-worn shirt</option><option>Signed item</option><option>Boots</option><option>Other</option></select></label><label>Country<input id="memCountry" required></label></div>
+        <label>Price (€)<input id="memPrice" type="number" min=".01" step=".01" required></label>
+        <label>Description<textarea id="memDescription" maxlength="1000"></textarea></label>
+        <label>Photo<input id="memPhoto" type="file" accept="image/*"></label>
+        <button class="primary full" id="memSubmit">Publish item</button><p id="memMsg"></p>
+      </form>
     </div>
-  </div>
-
-  <div class="modal" id="messagesModal" hidden>
-    <div class="dialog wide">
-      <button class="x" type="button" data-close="messagesModal">×</button>
-      <h2 data-en="Messages" data-he="הודעות">Messages</h2>
-      <div id="conversationList"></div>
-      <div id="chat" hidden>
-        <div id="chatBody"></div>
-        <form id="replyForm">
-          <input id="replyText" required maxlength="2000" placeholder="Write a reply">
-          <button class="primary" type="submit">Send</button>
-        </form>
-      </div>
-      <p id="messagesMsg" role="status"></p>
-    </div>
-  </div>
-
-  <div class="modal" id="detailModal" hidden>
-    <div class="dialog wide">
-      <button class="x" type="button" data-close="detailModal">×</button>
-      <div id="detailContent"></div>
-    </div>
-  </div>
-  <div id="toast" role="status" hidden></div>
+  </section>
+  <section id="alerts" class="alerts-section" hidden>
+    <div><div class="eyebrow"><span></span>DON'T MISS YOUR TEAM</div><h2>Your team. Your <span class="green">alerts.</span></h2><p>Create an account to follow the events that matter to you.</p><button class="primary" onclick="document.getElementById('openAuth').click()">Get started →</button></div><div class="alert-symbol">↗</div>
+  </section>
+  <section id="teamHub" class="market-section" hidden>
+    <div class="eyebrow"><span></span>THE FAN COMMUNITY</div><h2>Find your <span class="green">club.</span></h2><p>Search clubs, see their crests and follow your team.</p>
+    <div class="filters"><input id="clubSearch" placeholder="Search clubs..."><select id="leagueFilter"><option value="All">All leagues</option><option>English Premier League</option><option>La Liga</option><option>Bundesliga</option><option>Serie A</option><option>Ligue 1</option></select></div>
+    <p id="clubStatus">Loading club directory...</p><div id="clubGrid" class="grid"></div><div id="clubDetail"></div>
+  </section>
+  <section id="reviews" class="market-section" hidden>
+    <div class="eyebrow"><span></span>COMMUNITY TRUST</div><h2>Seller <span class="green">reviews.</span></h2><p>Read feedback from other Ticketly users.</p>
+    <div id="reviewsList" class="review-list"></div><p id="reviewsStatus"></p>
+  </section>
+</main>
+<footer><a class="brand" href="#">TICKETLY<span class="orange">.</span></a><span>Made for fans, everywhere.</span></footer>
+<div class="modal" id="authModal" hidden><div class="dialog"><button class="x" data-close="authModal">×</button><h2 id="authTitle">Sign in</h2><form id="authForm"><label>Email<input id="email" type="email" required></label><label>Password<input id="password" type="password" minlength="6" required></label><button class="primary full" id="authSubmit">Sign in</button></form><button id="switchAuth" class="text-button">Need an account? Sign up</button><p id="authMsg"></p></div></div>
+<div class="modal" id="contactModal" hidden><div class="dialog"><button class="x" data-close="contactModal">×</button><h2 id="contactTitle">Message seller</h2><form id="contactForm"><textarea id="firstMessage" required maxlength="2000" placeholder="Write a message"></textarea><button class="primary full">Send message</button></form><p id="contactMsg"></p></div></div>
+<div class="modal" id="messagesModal" hidden><div class="dialog wide"><button class="x" data-close="messagesModal">×</button><h2>Messages / הודעות</h2><div id="conversationList"></div><div id="chat" hidden><div id="chatBody"></div><form id="replyForm"><input id="replyText" required maxlength="2000" placeholder="Write a reply"><button class="primary">Send</button></form></div><p id="messagesMsg"></p></div></div>
+<div id="toast" hidden></div>
+<div class="modal" id="detailModal" hidden><div class="dialog wide"><button class="x" data-close="detailModal">×</button><div id="detailContent"></div></div></div>
 </body>
 </html>
