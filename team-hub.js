@@ -1,259 +1,305 @@
 
 (() => {
-"use strict";
+  const SUPABASE_URL = "https://lhmatsjxdkgoqubuezfi.supabase.co";
+  const SUPABASE_KEY = "sb_publishable_jENZfb_D2Tws5sk3bkSkQA_BDvzdknA";
 
-const SUPABASE_URL = "https://lhmatsjxdkgoqubuezfi.supabase.co";
-const SUPABASE_KEY = "sb_publishable_jENZfb_D2Tws5sk3bkSkQA_BDvzdknA";
+  let db;
+  let selectedTeam = null;
 
-const $ = id => document.getElementById(id);
-const esc = value => String(value ?? "").replace(/[&<>"']/g, c => ({
-  "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"
-}[c]));
+  const $ = id => document.getElementById(id);
+  const escapeHTML = value => String(value ?? "").replace(/[&<>"']/g, c => ({
+    "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
+  })[c]);
 
-let db = null;
-let teams = [];
-let selectedSport = "Football";
-let selectedTeam = null;
-let signedInUser = null;
+  function addStyles() {
+    if ($("teamHubStyles")) return;
 
-function getDB() {
-  if (!db) {
-    if (!window.supabase?.createClient) throw new Error("Supabase did not load.");
-    db = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+    const style = document.createElement("style");
+    style.id = "teamHubStyles";
+    style.textContent = `
+      .th-wrap{max-width:1200px;margin:auto}
+      .th-search{width:100%;padding:15px;border:1px solid #e3dfd4;background:#fffefa;margin:20px 0}
+      .th-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px}
+      .th-card{background:#fffefa;border:1px solid #e3dfd4;padding:22px;cursor:pointer;text-align:left;color:#202b30}
+      .th-card:hover{border-color:#176d54;transform:translateY(-2px)}
+      .th-card h3{margin:10px 0}
+      .th-logo{width:58px;height:58px;object-fit:contain}
+      .th-post{background:#fffefa;border:1px solid #e3dfd4;padding:20px;margin:14px 0}
+      .th-post textarea,.th-post input{width:100%;padding:13px;margin:8px 0;border:1px solid #e3dfd4}
+      .th-back{background:transparent;border:0;color:#176d54;padding:12px 0;font-weight:bold;cursor:pointer}
+      .th-muted{color:#7a8585}
+      .th-button{background:#176d54;color:white;border:0;padding:12px 18px;cursor:pointer;font-weight:bold}
+      .th-error{color:#b42318}
+      @media(max-width:700px){.th-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+      @media(max-width:450px){.th-grid{grid-template-columns:1fr}}
+    `;
+    document.head.appendChild(style);
   }
-  return db;
-}
 
-function currentUser() {
-  return getDB().auth.getUser().then(({data}) => data.user || null);
-}
-
-function message(container, text) {
-  container.innerHTML = `<p class="th-empty">${esc(text)}</p>`;
-}
-
-function showPage(id) {
-  const pages = ["home","tickets","memorabilia","sell","alerts","teamHub","reviews"];
-  pages.forEach(page => {
-    const element = $(page);
-    if (element) element.hidden = page !== id;
-  });
-
-  document.querySelectorAll("[data-page],[data-th]").forEach(button => {
-    button.classList.toggle("active",
-      button.dataset.page === id || button.dataset.th === id);
-  });
-
-  if (id === "home" && $("ticker")) $("ticker").hidden = false;
-  else if ($("ticker")) $("ticker").hidden = true;
-
-  window.scrollTo({top:0,behavior:"smooth"});
-
-  if (id === "teamHub") loadTeams();
-  if (id === "reviews") loadReviews();
-}
-
-const styles = document.createElement("style");
-styles.textContent = `
-.th-tabs,.th-row{display:flex;gap:12px;flex-wrap:wrap;margin:22px 0}
-.th-tabs button,.th-btn{padding:12px 18px;border:1px solid #e3dfd4;background:#fffefa;color:#176d54;font-weight:700;cursor:pointer}
-.th-tabs button.on,.th-btn.on,.th-primary{background:#176d54;color:white}
-.th-search{padding:14px;width:min(100%,450px);border:1px solid #e3dfd4;background:#fffefa}
-.th-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:15px;margin:24px 0}
-.th-team{display:flex;align-items:center;gap:14px;text-align:left;padding:18px;background:#fffefa;border:1px solid #e3dfd4;cursor:pointer;color:#202b30}
-.th-team img{width:52px;height:52px;object-fit:contain}
-.th-panel{background:#fffefa;border:1px solid #e3dfd4;padding:24px;margin:22px 0}
-.th-panel textarea{width:100%;min-height:90px;padding:13px;border:1px solid #e3dfd4;margin:12px 0}
-.th-post,.th-review{padding:16px 0;border-bottom:1px solid #e3dfd4}
-.th-muted,.th-post small{color:#78827e}
-.th-primary{border:0;padding:13px 20px;cursor:pointer}
-.th-empty{padding:20px;background:#fffefa;color:#78827e}
-.th-logo{width:64px;height:64px;object-fit:contain}
-.th-profile{margin-top:25px;padding-top:20px;border-top:1px solid #e3dfd4}
-@media(max-width:650px){.th-grid{grid-template-columns:1fr}}
-`;
-document.head.append(styles);
-
-async function loadTeams() {
-  const target = $("teamHubContent");
-  target.innerHTML = `
-    <div class="th-tabs">
-      <button class="on" data-sport="Football">⚽ Football</button>
-      <button data-sport="Basketball">🏀 Basketball</button>
-    </div>
-    <input id="thSearch" class="th-search" placeholder="Search clubs...">
-    <div id="thTeams" class="th-grid"></div>
-    <div id="thTeamDetail"></div>
-  `;
-
-  target.querySelectorAll("[data-sport]").forEach(button => {
-    button.addEventListener("click", () => {
-      selectedSport = button.dataset.sport;
-      target.querySelectorAll("[data-sport]").forEach(b =>
-        b.classList.toggle("on", b === button));
-      renderTeams();
-    });
-  });
-
-  $("thSearch").addEventListener("input", renderTeams);
-
-  try {
-    const {data,error} = await getDB().from("teams")
-      .select("*").order("name");
-    if (error) throw error;
-    teams = data || [];
-    renderTeams();
-  } catch (error) {
-    message($("thTeams"),"Could not load clubs: " + error.message);
+  function message(id, text, error = false) {
+    const el = $(id);
+    if (!el) return;
+    el.textContent = text;
+    el.classList.toggle("th-error", error);
   }
-}
 
-function renderTeams() {
-  const search = $("thSearch").value.toLowerCase();
-  const rows = teams.filter(team =>
-    team.sport === selectedSport &&
-    `${team.name} ${team.league || ""}`.toLowerCase().includes(search)
-  );
+  async function loadTeams() {
+    const grid = $("teamGrid");
+    if (!grid) return;
 
-  $("thTeams").innerHTML = rows.length ? rows.map(team => `
-    <button class="th-team" data-team="${esc(team.id)}">
-      ${team.logo_url
-        ? `<img src="${esc(team.logo_url)}" alt="${esc(team.name)} logo">`
-        : `<span style="font-size:35px">⚽</span>`}
-      <span><b>${esc(team.name)}</b><br>
-      <small class="th-muted">${esc(team.league || selectedSport)}</small></span>
-    </button>
-  `).join("") : `<p class="th-empty">No clubs have been added to this category yet.</p>`;
+    grid.innerHTML = "<p>Loading teams...</p>";
 
-  $("thTeams").querySelectorAll("[data-team]").forEach(button => {
-    button.addEventListener("click", () => openTeam(button.dataset.team));
-  });
-}
+    const { data, error } = await db
+      .from("teams")
+      .select("*")
+      .order("name");
 
-async function openTeam(id) {
-  selectedTeam = teams.find(team => String(team.id) === String(id));
-  if (!selectedTeam) return;
-
-  const box = $("thTeamDetail");
-  box.innerHTML = `
-    <div class="th-panel">
-      <div class="th-row">
-        ${selectedTeam.logo_url
-          ? `<img class="th-logo" src="${esc(selectedTeam.logo_url)}" alt="">`
-          : "⚽"}
-        <div><h2>${esc(selectedTeam.name)}</h2>
-        <p class="th-muted">${esc(selectedTeam.league || "")}</p></div>
-      </div>
-      <button id="thFollow" class="th-btn">Loading follow status...</button>
-      <h3>Fan posts</h3>
-      <form id="thPost">
-        <textarea id="thBody" maxlength="1500" required placeholder="Write an update about ${esc(selectedTeam.name)}..."></textarea>
-        <button class="th-primary">Publish post</button>
-      </form>
-      <div id="thPosts">Loading posts...</div>
-    </div>
-  `;
-
-  try {
-    const client = getDB();
-    signedInUser = await currentUser();
-
-    const {data: follows,error: followError} = await client
-      .from("team_follows").select("user_id")
-      .eq("team_id",selectedTeam.id);
-
-    if (followError) throw followError;
-
-    let following = (follows || []).some(row =>
-      row.user_id === signedInUser?.id);
-
-    const followButton = $("thFollow");
-    followButton.textContent = following ? "Following ✓" : "Follow team";
-
-    followButton.onclick = async () => {
-      if (!signedInUser) return alert("Please sign in first.");
-      const result = following
-        ? await client.from("team_follows").delete()
-            .eq("team_id",selectedTeam.id).eq("user_id",signedInUser.id)
-        : await client.from("team_follows").insert({
-            team_id:selectedTeam.id,user_id:signedInUser.id
-          });
-
-      if (result.error) return alert(result.error.message);
-      following = !following;
-      followButton.textContent = following ? "Following ✓" : "Follow team";
-    };
-
-    $("thPost").onsubmit = async event => {
-      event.preventDefault();
-      if (!signedInUser) return alert("Please sign in first.");
-      const body = $("thBody").value.trim();
-      if (!body) return;
-
-      const {error} = await client.from("team_posts").insert({
-        team_id:selectedTeam.id,
-        user_id:signedInUser.id,
-        body
-      });
-
-      if (error) return alert(error.message);
-      $("thBody").value = "";
-      await loadPosts();
-    };
-
-    async function loadPosts() {
-      const {data,error} = await client.from("team_posts")
-        .select("body,created_at")
-        .eq("team_id",selectedTeam.id)
-        .order("created_at",{ascending:false}).limit(50);
-
-      if (error) return message($("thPosts"),error.message);
-
-      $("thPosts").innerHTML = data?.length ? data.map(post => `
-        <article class="th-post">
-          <p>${esc(post.body)}</p>
-          <small>${esc(new Date(post.created_at).toLocaleString())}</small>
-        </article>
-      `).join("") : `<p class="th-empty">No posts yet. Start the conversation!</p>`;
+    if (error) {
+      grid.innerHTML = "";
+      message("teamMessage", "Could not load teams: " + error.message, true);
+      return;
     }
 
-    await loadPosts();
-  } catch (error) {
-    message(box,error.message);
+    window.ticketlyTeams = data || [];
+    renderTeams(window.ticketlyTeams);
   }
-}
 
-async function loadReviews() {
-  const target = $("reviewsContent");
-  target.innerHTML = "Loading reviews...";
+  function renderTeams(teams) {
+    const grid = $("teamGrid");
+    if (!grid) return;
 
-  try {
-    const {data,error} = await getDB().from("seller_reviews")
-      .select("rating,review,created_at")
-      .order("created_at",{ascending:false}).limit(100);
+    if (!teams.length) {
+      grid.innerHTML = "<p>No teams have been added yet.</p>";
+      return;
+    }
 
-    if (error) throw error;
+    grid.innerHTML = teams.map(team => `
+      <button class="th-card" data-team-id="${escapeHTML(team.id)}">
+        ${team.logo_url
+          ? `<img class="th-logo" src="${escapeHTML(team.logo_url)}" alt="">`
+          : `<div class="th-logo">⚽</div>`}
+        <h3>${escapeHTML(team.name)}</h3>
+        <p class="th-muted">${escapeHTML(team.sport || "Football")} · ${escapeHTML(team.country || "")}</p>
+        <span>View team →</span>
+      </button>
+    `).join("");
 
-    target.innerHTML = data?.length ? data.map(review => `
-      <article class="th-review">
-        <b style="color:#c58a26">${"★".repeat(review.rating)}${"☆".repeat(5-review.rating)}</b>
-        <p>${esc(review.review || "")}</p>
-        <small class="th-muted">${esc(new Date(review.created_at).toLocaleDateString())}</small>
+    grid.querySelectorAll("[data-team-id]").forEach(button => {
+      button.addEventListener("click", () => {
+        const team = teams.find(t => String(t.id) === button.dataset.teamId);
+        if (team) openTeam(team);
+      });
+    });
+  }
+
+  async function openTeam(team) {
+    selectedTeam = team;
+    $("teamListView").hidden = true;
+    $("teamDetailView").hidden = false;
+
+    $("teamDetailTitle").textContent = team.name;
+    $("teamPosts").innerHTML = "<p>Loading posts...</p>";
+
+    const { data, error } = await db
+      .from("team_posts")
+      .select("*")
+      .eq("team_id", team.id)
+      .order("created_at", { ascending: false });
+
+    if (error) {
+      $("teamPosts").innerHTML = "";
+      message("teamPostMessage", "Could not load posts: " + error.message, true);
+      return;
+    }
+
+    renderPosts(data || []);
+    updateFollowButton();
+  }
+
+  function renderPosts(posts) {
+    const container = $("teamPosts");
+
+    if (!posts.length) {
+      container.innerHTML = "<p>No posts yet. Be the first to post!</p>";
+      return;
+    }
+
+    container.innerHTML = posts.map(post => `
+      <article class="th-post">
+        <p>${escapeHTML(post.body || post.content || "")}</p>
+        <small class="th-muted">${post.created_at ? new Date(post.created_at).toLocaleString() : ""}</small>
       </article>
-    `).join("") : `<p class="th-empty">No reviews yet.</p>`;
-  } catch (error) {
-    message(target,"Could not load reviews: " + error.message);
+    `).join("");
   }
-}
 
-document.addEventListener("DOMContentLoaded", () => {
-  document.querySelectorAll("[data-th]").forEach(button => {
-    button.addEventListener("click",() => showPage(button.dataset.th));
-  });
+  async function updateFollowButton() {
+    const button = $("teamFollowButton");
+    if (!button || !selectedTeam) return;
 
-  // Keep the original marketplace navigation working.
-  document.querySelectorAll("[data-page]").forEach(button => {
-    button.addEventListener("click",() => showPage(button.dataset.page));
-  });
-});
+    const { data: auth } = await db.auth.getUser();
+    const user = auth?.user;
+
+    if (!user) {
+      button.textContent = "Sign in to follow";
+      return;
+    }
+
+    const { data, error } = await db
+      .from("team_follows")
+      .select("*")
+      .eq("team_id", selectedTeam.id)
+      .eq("user_id", user.id)
+      .maybeSingle();
+
+    if (error) {
+      message("teamPostMessage", error.message, true);
+      return;
+    }
+
+    button.textContent = data ? "Unfollow team" : "Follow team";
+  }
+
+  async function toggleFollow() {
+    if (!selectedTeam) return;
+
+    const { data: auth } = await db.auth.getUser();
+    const user = auth?.user;
+
+    if (!user) {
+      document.getElementById("openAuth")?.click();
+      return;
+    }
+
+    const { data: existing, error: checkError } = await db
+      .from("team_follows")
+      .select("*")
+      .eq("team_id", selectedTeam.id)
+      .eq("user_id", user.id)
+      .maybeSingle();
+
+    if (checkError) {
+      message("teamPostMessage", checkError.message, true);
+      return;
+    }
+
+    let result;
+
+    if (existing) {
+      result = await db.from("team_follows").delete()
+        .eq("team_id", selectedTeam.id)
+        .eq("user_id", user.id);
+    } else {
+      result = await db.from("team_follows").insert({
+        team_id: selectedTeam.id,
+        user_id: user.id
+      });
+    }
+
+    if (result.error) {
+      message("teamPostMessage", result.error.message, true);
+      return;
+    }
+
+    message("teamPostMessage", "Your follow settings have been updated.");
+    updateFollowButton();
+  }
+
+  async function createPost(event) {
+    event.preventDefault();
+
+    if (!selectedTeam) return;
+
+    const { data: auth } = await db.auth.getUser();
+    const user = auth?.user;
+
+    if (!user) {
+      document.getElementById("openAuth")?.click();
+      return;
+    }
+
+    const body = $("teamPostText").value.trim();
+    if (!body) return;
+
+    const { error } = await db.from("team_posts").insert({
+      team_id: selectedTeam.id,
+      user_id: user.id,
+      body
+    });
+
+    if (error) {
+      message("teamPostMessage", error.message, true);
+      return;
+    }
+
+    $("teamPostText").value = "";
+    message("teamPostMessage", "Post published!");
+    openTeam(selectedTeam);
+  }
+
+  async function loadReviews() {
+    const container = $("reviewsList");
+    if (!container) return;
+
+    container.innerHTML = "<p>Loading reviews...</p>";
+
+    const { data, error } = await db
+      .from("seller_reviews")
+      .select("*")
+      .order("created_at", { ascending: false });
+
+    if (error) {
+      container.innerHTML = "";
+      message("reviewsMessage", "Could not load reviews: " + error.message, true);
+      return;
+    }
+
+    if (!data?.length) {
+      container.innerHTML = "<p>No seller reviews yet.</p>";
+      return;
+    }
+
+    container.innerHTML = data.map(review => {
+      const rating = Math.max(1, Math.min(5, Number(review.rating) || 0));
+      return `
+        <article class="th-post">
+          <strong>${"★".repeat(rating)}${"☆".repeat(5-rating)}</strong>
+          <p>${escapeHTML(review.comment || review.review || "")}</p>
+          <small class="th-muted">${review.created_at ? new Date(review.created_at).toLocaleDateString() : ""}</small>
+        </article>
+      `;
+    }).join("");
+  }
+
+  function showTeamList() {
+    selectedTeam = null;
+    $("teamDetailView").hidden = true;
+    $("teamListView").hidden = false;
+  }
+
+  async function start() {
+    addStyles();
+
+    if (!window.supabase?.createClient) {
+      message("teamMessage", "Supabase did not load. Refresh the page and try again.", true);
+      return;
+    }
+
+    db = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+    $("teamSearch")?.addEventListener("input", event => {
+      const q = event.target.value.toLowerCase();
+      renderTeams((window.ticketlyTeams || []).filter(team =>
+        `${team.name} ${team.sport || ""} ${team.country || ""}`.toLowerCase().includes(q)
+      ));
+    });
+
+    $("teamBackButton")?.addEventListener("click", showTeamList);
+    $("teamFollowButton")?.addEventListener("click", toggleFollow);
+    $("teamPostForm")?.addEventListener("submit", createPost);
+
+    await loadTeams();
+    await loadReviews();
+  }
+
+  document.addEventListener("DOMContentLoaded", start);
 })();
